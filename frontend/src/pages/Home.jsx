@@ -7,7 +7,12 @@ const Home = () => {
     confirmationRequests: 0,
     okToPurchaseFull: 0,
     okToPurchaseDeposit: 0,
-    doNotPurchase: 0
+    doNotPurchase: 0,
+    noSlots: 0,
+    productCounts: {},
+    topUpDue: 0,
+    cancelled: 0,
+    amended: 0
   });
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
@@ -22,18 +27,35 @@ const Home = () => {
         });
         if (response.ok) {
           const data = await response.json();
-          setBookings(data);
           
-          // Calculate stats for admin
+          // Calculate all stats for admin
           if (userRole === 'admin') {
-            const stats = {
+            const newStats = {
               confirmationRequests: data.filter(b => b.status === 'requested').length,
               okToPurchaseFull: data.filter(b => b.validation_status === 'ok_to_purchase_full').length,
               okToPurchaseDeposit: data.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
-              doNotPurchase: data.filter(b => b.validation_status === 'do_not_purchase').length
+              doNotPurchase: data.filter(b => b.validation_status === 'do_not_purchase').length,
+              // Calculate filter counts
+              noSlots: data.filter(b => b.available_slots < 40).length,
+              topUpDue: data.filter(b => {
+                if (!b.top_up_deadline) return false;
+                const deadline = new Date(b.top_up_deadline);
+                const today = new Date();
+                return Math.ceil((deadline - today) / (1000 * 60 * 60 * 24)) <= 7;
+              }).length,
+              cancelled: data.filter(b => b.status === 'cancelled').length,
+              amended: data.filter(b => b.status === 'amended').length,
+              // Calculate product counts
+              productCounts: data.reduce((acc, booking) => {
+                if (booking.product) {
+                  acc[booking.product] = (acc[booking.product] || 0) + 1;
+                }
+                return acc;
+              }, {})
             };
-            setStats(stats);
+            setStats(newStats);
           }
+          setBookings(data);
         }
       } catch (error) {
         console.error('Error fetching bookings:', error);
@@ -41,7 +63,6 @@ const Home = () => {
     };
 
     fetchBookings();
-    // Set up polling every 30 seconds
     const interval = setInterval(fetchBookings, 30000);
     return () => clearInterval(interval);
   }, [userRole]);
@@ -216,7 +237,7 @@ const Home = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* No Slots Filter */}
+            {/* No Slots Filter - Now with count */}
             <button
               onClick={() => {
                 setSelectedFilters(prev => ({ ...prev, noSlots: !prev.noSlots }));
@@ -246,11 +267,11 @@ const Home = () => {
                   selectedFilters.noSlots
                     ? 'text-red-700 dark:text-red-300'
                     : 'text-gray-700 dark:text-gray-300'
-                }`}>No Slots</span>
+                }`}>No Slots ({stats.noSlots})</span>
               </div>
             </button>
 
-            {/* Product Filter */}
+            {/* Product Filter - Now showing total count in dropdown */}
             <div className="relative">
               <select
                 value={selectedFilters.product}
@@ -261,13 +282,13 @@ const Home = () => {
                 className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:text-gray-300"
               >
                 <option value="">Select Product</option>
-                {products.map(product => (
-                  <option key={product} value={product}>{product}</option>
+                {Object.entries(stats.productCounts).map(([product, count]) => (
+                  <option key={product} value={product}>{`${product} (${count})`}</option>
                 ))}
               </select>
             </div>
 
-            {/* Top Up Due Filter */}
+            {/* Top Up Due Filter - Now with count */}
             <button
               onClick={() => {
                 setSelectedFilters(prev => ({ ...prev, topUpDue: !prev.topUpDue }));
@@ -297,11 +318,11 @@ const Home = () => {
                   selectedFilters.topUpDue
                     ? 'text-yellow-700 dark:text-yellow-300'
                     : 'text-gray-700 dark:text-gray-300'
-                }`}>Top Up Due</span>
+                }`}>Top Up Due ({stats.topUpDue})</span>
               </div>
             </button>
 
-            {/* Cancelled Filter */}
+            {/* Cancelled Filter - Now with count */}
             <button
               onClick={() => {
                 setSelectedFilters(prev => ({ ...prev, cancelled: !prev.cancelled }));
@@ -331,11 +352,11 @@ const Home = () => {
                   selectedFilters.cancelled
                     ? 'text-purple-700 dark:text-purple-300'
                     : 'text-gray-700 dark:text-gray-300'
-                }`}>Cancelled</span>
+                }`}>Cancelled ({stats.cancelled})</span>
               </div>
             </button>
 
-            {/* Amended Filter */}
+            {/* Amended Filter - Now with count */}
             <button
               onClick={() => {
                 setSelectedFilters(prev => ({ ...prev, amended: !prev.amended }));
@@ -365,7 +386,7 @@ const Home = () => {
                   selectedFilters.amended
                     ? 'text-indigo-700 dark:text-indigo-300'
                     : 'text-gray-700 dark:text-gray-300'
-                }`}>Amended</span>
+                }`}>Amended ({stats.amended})</span>
               </div>
             </button>
           </div>
