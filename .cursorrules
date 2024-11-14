@@ -1,0 +1,669 @@
+{
+
+  "version": 1,
+
+  "structure": {
+
+    "root": "booking-app",
+
+    "directories": {
+
+      "backend": {
+
+        "path": "backend/",
+
+        "children": {
+
+          "app": {
+
+            "path": "app/",
+
+            "children": {
+
+              "models": {
+
+                "path": "models/",
+
+                "description": "Database models",
+
+                "files": [
+
+                  "user.py",
+
+                  "booking.py",
+
+                  "activity_log.py",
+
+                  "site.py",
+
+                  "__init__.py"
+
+                ]
+
+              },
+
+              "routes": {
+
+                "path": "routes/",
+
+                "description": "API endpoints",
+
+                "files": [
+
+                  "auth.py",
+
+                  "users.py",
+
+                  "bookings.py",
+
+                  "__init__.py"
+
+                ]
+
+              },
+
+              "schemas": {
+
+                "path": "schemas/",
+
+                "description": "Pydantic schemas"
+
+              },
+
+              "utils": {
+
+                "path": "utils/",
+
+                "description": "Utility functions",
+
+                "files": [
+
+                  "auth.py"
+
+                ]
+
+              }
+
+            }
+
+          },
+
+          "files": [
+
+            "requirements.txt",
+
+            "main.py",
+
+            "run.py",
+
+            "init_db.py",
+
+            "create_superuser.py",
+
+            "init_sites.py"
+
+          ]
+
+        }
+
+      },
+
+      "frontend": {
+
+        "path": "frontend/",
+
+        "children": {
+
+          "src": {
+
+            "path": "src/",
+
+            "children": {
+
+              "components": {
+
+                "path": "components/",
+
+                "description": "Reusable React components",
+
+                "files": [
+
+                  "Layout.jsx"
+
+                ]
+
+              },
+
+              "pages": {
+
+                "path": "pages/",
+
+                "description": "Page components",
+
+                "files": [
+
+                  "Dashboard.jsx",
+
+                  "Booking.jsx",
+
+                  "Login.jsx",
+
+                  "UserManagement.jsx",
+
+                  "Settings.jsx"
+
+                ]
+
+              },
+
+              "context": {
+
+                "path": "context/",
+
+                "description": "React context providers",
+
+                "files": [
+
+                  "ThemeContext.jsx"
+
+                ]
+
+              },
+
+              "utils": {
+
+                "path": "utils/",
+
+                "description": "Utility functions"
+
+              }
+
+            },
+
+            "files": [
+
+              "App.js",
+
+              "index.js",
+
+              "index.css"
+
+            ]
+
+          },
+
+          "public": {
+
+            "path": "public/",
+
+            "files": [
+
+              "index.html"
+
+            ]
+
+          },
+
+          "files": [
+
+            "package.json",
+
+            "tailwind.config.js"
+
+          ]
+
+        }
+
+      }
+
+    }
+
+  },
+
+  "rules": {
+
+    "frontend": {
+
+      "path": "frontend/",
+
+      "language": "javascript",
+
+      "rules": {
+
+        "components": {
+
+          "path": "src/components/",
+
+          "description": "React components used across multiple pages",
+
+          "naming": "PascalCase.jsx",
+
+          "components": {
+
+            "Layout": {
+
+              "description": "Main layout component with navigation and theme handling",
+
+              "dependencies": ["ThemeContext", "react-router-dom"]
+
+            }
+
+          }
+
+        },
+
+        "pages": {
+
+          "path": "src/pages/",
+
+          "description": "React components representing full pages",
+
+          "naming": "PascalCase.jsx",
+
+          "pages": {
+
+            "Dashboard": {
+
+              "description": "Main dashboard with two-step booking form and summary",
+
+              "dependencies": ["react-datepicker"],
+
+              "features": {
+
+                "bookingForm": {
+
+                  "steps": ["slot selection", "booking details"],
+
+                  "summary": "Shows booking summary in right panel"
+
+                }
+
+              }
+
+            },
+
+            "Bookings": {
+
+              "description": "Bookings management with filtered views",
+
+              "features": {
+
+                "tabs": ["My Bookings", "All Bookings", "Recent Bookings"],
+
+                "filtering": "Tab-based filtering of bookings",
+
+                "table": "Consistent table structure with Dashboard summary"
+
+              }
+
+            }
+
+          }
+
+        },
+
+        "context": {
+
+          "path": "src/context/",
+
+          "description": "React context providers and hooks",
+
+          "naming": "PascalCase.jsx",
+
+          "contexts": {
+
+            "ThemeContext": {
+
+              "description": "Dark/light theme management",
+
+              "required": true
+
+            }
+
+          }
+
+        },
+
+        "styles": {
+
+          "path": "src/",
+
+          "description": "Global styles and Tailwind configuration",
+
+          "files": ["index.css", "tailwind.config.js"]
+
+        },
+
+        "public": {
+
+          "path": "public/",
+
+          "description": "Static files and HTML template",
+
+          "files": ["index.html"]
+
+        }
+
+      }
+
+    },
+
+    "backend": {
+
+      "path": "backend/",
+
+      "language": "python",
+
+      "rules": {
+
+        "models": {
+
+          "path": "app/models/",
+
+          "description": "SQLAlchemy database models",
+
+          "naming": "snake_case.py",
+
+          "models": {
+
+            "user": {
+
+              "description": "User model with authentication",
+
+              "required": true
+
+            },
+
+            "booking": {
+
+              "description": "Booking model for reservation system",
+
+              "required": true
+
+            },
+
+            "activity_log": {
+
+              "description": "Activity logging model",
+
+              "required": true
+
+            },
+
+            "site": {
+
+              "description": "Site and location models",
+
+              "required": true
+
+            }
+
+          }
+
+        },
+
+        "routes": {
+
+          "path": "app/routes/",
+
+          "description": "FastAPI route handlers",
+
+          "naming": "snake_case.py",
+
+          "routes": {
+
+            "auth": {
+
+              "description": "Authentication endpoints",
+
+              "required": true
+
+            },
+
+            "users": {
+
+              "description": "User management endpoints",
+
+              "required": true
+
+            },
+
+            "bookings": {
+
+              "description": "Booking management endpoints",
+
+              "required": true,
+
+              "endpoints": {
+
+                "/my-bookings": "Get user's own bookings",
+
+                "/recent-bookings": "Get bookings from last 30 days",
+
+                "/all": "Get all bookings (admin only)"
+
+              },
+
+              "access": {
+
+                "superuser": "No access to booking operations",
+
+                "admin": "Full access to all bookings",
+
+                "user": "Access to own bookings only"
+
+              }
+
+            }
+
+          }
+
+        },
+
+        "utils": {
+
+          "path": "app/utils/",
+
+          "description": "Utility functions and helpers",
+
+          "naming": "snake_case.py",
+
+          "utils": {
+
+            "auth": {
+
+              "description": "Authentication utilities",
+
+              "required": true
+
+            }
+
+          }
+
+        },
+
+        "scripts": {
+
+          "path": "./",
+
+          "description": "Database initialization and setup scripts",
+
+          "files": [
+
+            "init_db.py",
+
+            "create_superuser.py",
+
+            "init_sites.py",
+
+            "run.py"
+
+          ]
+
+        }
+
+      }
+
+    },
+
+    "general": {
+
+      "indent": {
+
+        "frontend": {
+
+          "size": 2,
+
+          "style": "spaces"
+
+        },
+
+        "backend": {
+
+          "size": 4,
+
+          "style": "spaces"
+
+        }
+
+      },
+
+      "lineEndings": "lf",
+
+      "maxLineLength": {
+
+        "frontend": 100,
+
+        "backend": 88
+
+      },
+
+      "environmentVariables": {
+
+        "required": [
+
+          "DATABASE_URL",
+
+          "SECRET_KEY"
+
+        ]
+
+      }
+
+    },
+
+    "git": {
+
+      "ignore": [
+
+        "node_modules/",
+
+        "__pycache__/",
+
+        "*.pyc",
+
+        ".env",
+
+        "venv/",
+
+        "build/",
+
+        "dist/",
+
+        ".DS_Store"
+
+      ]
+
+    }
+
+  },
+
+  "dependencies": {
+
+    "frontend": {
+
+      "required": [
+
+        "react",
+
+        "react-dom",
+
+        "react-router-dom",
+
+        "react-datepicker",
+
+        "tailwindcss",
+
+        "@headlessui/react"
+
+      ],
+
+      "devDependencies": [
+
+        "@testing-library/jest-dom",
+
+        "@testing-library/react",
+
+        "@testing-library/user-event"
+
+      ]
+
+    },
+
+    "backend": {
+
+      "required": [
+
+        "fastapi>=0.95.0",
+
+        "uvicorn>=0.21.1",
+
+        "sqlalchemy>=1.4.41",
+
+        "psycopg2-binary>=2.9.6",
+
+        "python-jose[cryptography]>=3.3.0",
+
+        "passlib[bcrypt]>=1.7.4",
+
+        "python-multipart>=0.0.6",
+
+        "pydantic>=1.10.7",
+
+        "python-dotenv>=1.0.0"
+
+      ],
+
+      "devDependencies": [
+
+        "setuptools==59.6.0",
+
+        "wheel==0.37.1"
+
+      ]
+
+    }
+
+  },
+
+  "testing": {
+
+    "frontend": {
+
+      "framework": "jest",
+
+      "command": "npm test"
+
+    },
+
+    "backend": {
+
+      "framework": "pytest",
+
+      "command": "pytest"
+
+    }
+
+  }
+
+} 

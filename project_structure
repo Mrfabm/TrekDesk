@@ -1,0 +1,15 @@
+booking-app/
+├── backend/
+│   ├── app/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── schemas/
+│   │   └── utils/
+│   ├── requirements.txt
+│   └── main.py
+└── frontend/
+    ├── src/
+    │   ├── components/
+    │   ├── pages/
+    │   └── utils/
+    └── package.json 
