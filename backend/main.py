@@ -7,6 +7,7 @@ from app.routes.users import router as users_router
 from app.routes.bookings import router as bookings_router
 from app.routes.finance import router as finance_router
 from app.routes.notifications import router as notifications_router
+from app.routes.available_slots import router as available_slots_router
 from app.utils.auth import get_current_user
 
 app = FastAPI()
@@ -26,3 +27,4 @@ app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(bookings_router, prefix="/api/bookings", tags=["bookings"])
 app.include_router(finance_router, prefix="/api/finance", tags=["finance"])
 app.include_router(notifications_router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(available_slots_router, prefix="/api/available-slots", tags=["available-slots"])

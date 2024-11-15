@@ -9,6 +9,7 @@ import Bookings from './pages/Bookings';
 import Layout from './components/Layout';
 import FinanceDashboard from './pages/FinanceDashboard';
 import PaymentValidation from './pages/PaymentValidation';
+import AvailableSlots from './pages/AvailableSlots';
 
 function App() {
   const PrivateRoute = ({ children }) => {
@@ -95,6 +96,13 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <Bookings />
+              </Layout>
+            </PrivateRoute>
+          } />
+          <Route path="/available-slots" element={
+            <PrivateRoute>
+              <Layout>
+                <AvailableSlots />
               </Layout>
             </PrivateRoute>
           } />

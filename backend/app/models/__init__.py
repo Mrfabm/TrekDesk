@@ -8,4 +8,5 @@ from .site import Site, Product
 from .booking import Booking
 from .payment import Payment
 from .activity_log import ActivityLog
-from .notification import Notification 
+from .notification import Notification
+from .available_slots import AvailableSlot 
