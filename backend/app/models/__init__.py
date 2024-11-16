@@ -9,4 +9,5 @@ from .booking import Booking
 from .payment import Payment
 from .activity_log import ActivityLog
 from .notification import Notification
-from .available_slots import AvailableSlot 
+from .available_slots import AvailableSlot
+from .scrape_status import ScrapeStatus 
