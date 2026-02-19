@@ -63,30 +63,40 @@ async def get_available_slots(
         # Get tomorrow's date in DD/MM/YYYY format
         tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d/%m/%Y")
         
+        # Parse and validate date filters
+        try:
+            start_date_obj = datetime.strptime(start_date, "%d/%m/%Y") if start_date else None
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format. Expected DD/MM/YYYY")
+
+        try:
+            end_date_obj = datetime.strptime(end_date, "%d/%m/%Y") if end_date else None
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format. Expected DD/MM/YYYY")
+
+        if start_date_obj and end_date_obj and start_date_obj > end_date_obj:
+            raise HTTPException(status_code=400, detail="start_date must be before end_date")
+
         # Get all slots first
         slots = query.all()
         filtered_slots = []
-        
+        tomorrow_date = datetime.strptime(tomorrow, "%d/%m/%Y")
+
         for slot in slots:
             # Convert date strings to datetime objects for comparison
             slot_date = datetime.strptime(slot.date, "%d/%m/%Y")
-            tomorrow_date = datetime.strptime(tomorrow, "%d/%m/%Y")
-            
+
             # Skip if date is before tomorrow
             if slot_date < tomorrow_date:
                 continue
-                
+
             # Apply date range filters if provided
-            if start_date:
-                start_date_obj = datetime.strptime(start_date, "%d/%m/%Y")
-                if slot_date < start_date_obj:
-                    continue
-                    
-            if end_date:
-                end_date_obj = datetime.strptime(end_date, "%d/%m/%Y")
-                if slot_date > end_date_obj:
-                    continue
-                    
+            if start_date_obj and slot_date < start_date_obj:
+                continue
+
+            if end_date_obj and slot_date > end_date_obj:
+                continue
+
             filtered_slots.append(slot)
         
         logger.info(f"Found {len(filtered_slots)} {slot_type} slots")
@@ -166,6 +176,32 @@ async def get_scrape_status(
         "slots_count": slots_count
     }
 
+async def run_scrape_with_status(status_record_id: int):
+    """Wrapper that runs the scraper and updates ScrapeStatus on completion or failure."""
+    db = None
+    try:
+        from ..database import SessionLocal
+        db = SessionLocal()
+        results = await scrape_slots()
+        slots_found = len(results) if results else 0
+        record = db.query(ScrapeStatus).filter(ScrapeStatus.id == status_record_id).first()
+        if record:
+            record.status = "success"
+            record.message = f"Scraped {slots_found} slots"
+            db.commit()
+    except Exception as e:
+        logger.error(f"Background scrape failed: {str(e)}")
+        if db:
+            record = db.query(ScrapeStatus).filter(ScrapeStatus.id == status_record_id).first()
+            if record:
+                record.status = "failed"
+                record.message = f"Scraping failed: {str(e)}"
+                db.commit()
+    finally:
+        if db:
+            db.close()
+
+
 @router.post("/trigger-slot-scrape")
 async def trigger_slot_scrape(
     background_tasks: BackgroundTasks,
@@ -173,30 +209,20 @@ async def trigger_slot_scrape(
     db: Session = Depends(get_db)
 ):
     try:
-        print("Starting slot scrape trigger...")  # Debug log
-        
         # Create initial status record
         status_record = ScrapeStatus(
             status="queued",
             message="Scraping queued",
-            last_run=datetime.utcnow()  # Make sure this is set
+            last_run=datetime.utcnow()
         )
         db.add(status_record)
         db.commit()
-        print("Created status record")  # Debug log
+        db.refresh(status_record)
 
-        # Add scraping task to background tasks
-        try:
-            print("Adding scrape task to background tasks...")  # Debug log
-            background_tasks.add_task(scrape_slots)
-            print("Successfully added scrape task")  # Debug log
-        except Exception as task_error:
-            print(f"Error adding task: {task_error}")  # Debug log
-            raise
-        
+        background_tasks.add_task(run_scrape_with_status, status_record.id)
+
         return {"message": "Slot scraping initiated"}
     except Exception as e:
-        print(f"Error in trigger_slot_scrape: {e}")  # Debug log
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

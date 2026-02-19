@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import axios from '../utils/axios';
+
+const formatDate = (date) => {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+};
 
 const AvailableSlots = () => {
     // Set default start date to tomorrow
@@ -39,24 +47,13 @@ const AvailableSlots = () => {
     const fetchSlots = async () => {
         try {
             setLoading(true);
-            const formattedStartDate = startDate.toLocaleDateString('en-GB');
-            const formattedEndDate = endDate.toLocaleDateString('en-GB');
+            const formattedStartDate = formatDate(startDate);
+            const formattedEndDate = formatDate(endDate);
 
-            const response = await fetch(
-                `http://localhost:8000/api/available-slots?start_date=${formattedStartDate}&end_date=${formattedEndDate}&slot_type=${selectedProduct}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                }
+            const { data } = await axios.get(
+                `/available-slots?start_date=${formattedStartDate}&end_date=${formattedEndDate}&slot_type=${selectedProduct}`
             );
-
-            if (response.ok) {
-                const data = await response.json();
-                setSlots(data.slots);
-            } else {
-                console.error('Failed to fetch slots');
-            }
+            setSlots(data.slots);
         } catch (error) {
             console.error('Error fetching slots:', error);
         } finally {

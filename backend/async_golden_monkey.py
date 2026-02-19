@@ -165,24 +165,24 @@ async def scrape_golden_monkey_slots(start_offset=0):
                 
                 if not all_results:
                     logger.error("No results were collected in this batch")
-                    return
-                
+                    return []
+
                 # Save to database
                 saved_count = 0
                 for date, slots in all_results:
                     if not date or not slots:
                         continue
-                        
+
                     try:
                         date_obj = datetime.strptime(date, "%d/%m/%Y").date()
                         if date_obj >= today:
                             existing_slot = db.query(GoldenMonkeySlot).filter(
                                 GoldenMonkeySlot.date == date
                             ).first()
-                            
+
                             if existing_slot:
                                 existing_slot.slots = slots
-                                existing_slot.updated_at = datetime.now()
+                                existing_slot.updated_at = datetime.utcnow()
                             else:
                                 new_slot = GoldenMonkeySlot(
                                     date=date,
@@ -190,10 +190,16 @@ async def scrape_golden_monkey_slots(start_offset=0):
                                 )
                                 db.add(new_slot)
                             saved_count += 1
-                            db.commit()
                     except Exception as e:
                         logger.error(f"Database error for date {date}: {str(e)}")
                         db.rollback()
+                        continue
+
+                try:
+                    db.commit()
+                except Exception as e:
+                    logger.error(f"Error committing batch to database: {str(e)}")
+                    db.rollback()
                 
                 batch_time = time.time() - batch_start_time
                 logger.info(f"Completed dates {dates[0]} to {dates[-1]} in {batch_time:.2f} seconds ({saved_count} slots)")

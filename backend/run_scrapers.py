@@ -35,7 +35,7 @@ async def run_scrapers():
                 # Run gorilla scraper
                 logger.info("Starting gorilla scraper...")
                 gorilla_start = time.time()
-                await scrape_slots(start_offset=start_offset, start_date=tomorrow)
+                await scrape_slots(start_offset=start_offset)
                 gorilla_time = time.time() - gorilla_start
                 logger.info(f"Completed gorilla slots batch in {gorilla_time:.2f} seconds")
                 
@@ -46,7 +46,7 @@ async def run_scrapers():
                 # Run monkey scraper
                 logger.info("Starting golden monkey scraper...")
                 monkey_start = time.time()
-                await scrape_golden_monkey_slots(start_offset=start_offset, start_date=tomorrow)
+                await scrape_golden_monkey_slots(start_offset=start_offset)
                 monkey_time = time.time() - monkey_start
                 logger.info(f"Completed golden monkey slots batch in {monkey_time:.2f} seconds")
                 
