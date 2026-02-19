@@ -2,70 +2,126 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
+  const navigate = useNavigate();
+  const userRole = localStorage.getItem('role');
   const [bookings, setBookings] = useState([]);
+  const [selectedFilters, setSelectedFilters] = useState({
+    product: '',
+    noSlots: false,
+    unpaid: false,
+    topUpDue: false,
+    cancelled: false,
+    amended: false
+  });
   const [stats, setStats] = useState({
     confirmationRequests: 0,
     okToPurchaseFull: 0,
     okToPurchaseDeposit: 0,
     doNotPurchase: 0,
     noSlots: 0,
-    productCounts: {},
     topUpDue: 0,
     cancelled: 0,
-    amended: 0
+    amended: 0,
+    unpaid: 0
   });
-  const navigate = useNavigate();
-  const userRole = localStorage.getItem('role');
+
+  const fetchBookings = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/bookings', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Apply all filters sequentially
+        let filteredBookings = data;
+
+        // Filter by product if selected
+        if (selectedFilters.product) {
+          filteredBookings = filteredBookings.filter(booking => 
+            booking.product === selectedFilters.product
+          );
+        }
+
+        // Apply advanced filters
+        if (selectedFilters.noSlots) {
+          filteredBookings = filteredBookings.filter(b => 
+            b.available_slots < 40
+          );
+        }
+
+        if (selectedFilters.unpaid) {
+          filteredBookings = filteredBookings.filter(b => 
+            (!b.payment_status || b.payment_status === 'pending') && b.payment_status !== 'fully_paid'
+          );
+        }
+
+        if (selectedFilters.topUpDue) {
+          filteredBookings = filteredBookings.filter(b => {
+            // Check if booking is not fully paid
+            if (b.payment_status === 'fully_paid' || b.validation_status === 'ok_to_purchase_full') return false;
+            
+            // Check if trekking date is within 45 days
+            const trekkingDate = new Date(b.date);
+            const today = new Date();
+            const daysUntilTrek = Math.ceil((trekkingDate - today) / (1000 * 60 * 60 * 24));
+            return daysUntilTrek <= 45 && daysUntilTrek > 0;
+          });
+        }
+
+        if (selectedFilters.cancelled) {
+          filteredBookings = filteredBookings.filter(b => 
+            b.status === 'cancelled'
+          );
+        }
+
+        if (selectedFilters.amended) {
+          filteredBookings = filteredBookings.filter(b => 
+            b.status === 'amended'
+          );
+        }
+
+        // Calculate stats based on filtered bookings
+        const newStats = {
+          confirmationRequests: filteredBookings.filter(b => b.status === 'requested').length,
+          okToPurchaseFull: filteredBookings.filter(b => b.validation_status === 'ok_to_purchase_full').length,
+          okToPurchaseDeposit: filteredBookings.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
+          doNotPurchase: filteredBookings.filter(b => b.validation_status === 'do_not_purchase').length,
+          noSlots: filteredBookings.filter(b => b.available_slots < 40).length,
+          topUpDue: filteredBookings.filter(b => {
+            if (b.payment_status === 'fully_paid' || b.validation_status === 'ok_to_purchase_full') return false;
+            const trekkingDate = new Date(b.date);
+            const today = new Date();
+            const daysUntilTrek = Math.ceil((trekkingDate - today) / (1000 * 60 * 60 * 24));
+            return daysUntilTrek <= 45 && daysUntilTrek > 0;
+          }).length,
+          cancelled: filteredBookings.filter(b => b.status === 'cancelled').length,
+          amended: filteredBookings.filter(b => b.status === 'amended').length,
+          unpaid: filteredBookings.filter(b => 
+            (!b.payment_status || b.payment_status === 'pending') && b.payment_status !== 'fully_paid'
+          ).length
+        };
+
+        setStats(newStats);
+        setBookings(filteredBookings);
+      }
+    } catch (error) {
+      console.error('Failed to fetch bookings:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/bookings', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Calculate all stats for admin
-          if (userRole === 'admin') {
-            const newStats = {
-              confirmationRequests: data.filter(b => b.status === 'requested').length,
-              okToPurchaseFull: data.filter(b => b.validation_status === 'ok_to_purchase_full').length,
-              okToPurchaseDeposit: data.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
-              doNotPurchase: data.filter(b => b.validation_status === 'do_not_purchase').length,
-              // Calculate filter counts
-              noSlots: data.filter(b => b.available_slots < 40).length,
-              topUpDue: data.filter(b => {
-                if (!b.top_up_deadline) return false;
-                const deadline = new Date(b.top_up_deadline);
-                const today = new Date();
-                return Math.ceil((deadline - today) / (1000 * 60 * 60 * 24)) <= 7;
-              }).length,
-              cancelled: data.filter(b => b.status === 'cancelled').length,
-              amended: data.filter(b => b.status === 'amended').length,
-              // Calculate product counts
-              productCounts: data.reduce((acc, booking) => {
-                if (booking.product) {
-                  acc[booking.product] = (acc[booking.product] || 0) + 1;
-                }
-                return acc;
-              }, {})
-            };
-            setStats(newStats);
-          }
-          setBookings(data);
-        }
-      } catch (error) {
-        console.error('Error fetching bookings:', error);
-      }
-    };
-
     fetchBookings();
     const interval = setInterval(fetchBookings, 30000);
     return () => clearInterval(interval);
   }, [userRole]);
+
+  // Update bookings when any filter changes
+  useEffect(() => {
+    fetchBookings();
+  }, [selectedFilters]);
 
   // Add navigation handler for cards
   const handleCardClick = (filterType) => {
@@ -76,23 +132,37 @@ const Home = () => {
 
   // Admin Dashboard Component
   const AdminDashboard = () => {
-    // Add state for filters
-    const [selectedFilters, setSelectedFilters] = useState({
-      noSlots: false,
-      product: '',
-      topUpDue: false,
-      cancelled: false,
-      amended: false
-    });
+    const getActionStatus = (booking) => {
+      if (!booking.validation_status) return "Pending";
+      return booking.validation_status.replace('_', ' ').title();
+    };
 
-    // Add state for available products
-    const [products, setProducts] = useState([
-      "Mountain gorillas",
-      "Golden Monkeys",
-      "Bisoke",
-      "Buhanga Eco-park",
-      // ... other products
-    ]);
+    const getActionStatusDisplay = (booking) => {
+      const status = booking.validation_status;
+      if (!status) return (
+        <span className="text-gray-600 dark:text-gray-400">
+          Pending
+        </span>
+      );
+
+      const statusColors = {
+        'ok_to_purchase_full': 'text-green-600 dark:text-green-400',
+        'ok_to_purchase_deposit': 'text-yellow-600 dark:text-yellow-400',
+        'do_not_purchase': 'text-red-600 dark:text-red-400'
+      };
+
+      const statusText = {
+        'ok_to_purchase_full': 'OK to Purchase (Full)',
+        'ok_to_purchase_deposit': 'OK to Purchase (Deposit)',
+        'do_not_purchase': 'Do Not Purchase'
+      };
+
+      return (
+        <span className={`font-medium ${statusColors[status]}`}>
+          {statusText[status]}
+        </span>
+      );
+    };
 
     return (
       <div className="max-w-7xl mx-auto px-4 py-4">
@@ -225,28 +295,41 @@ const Home = () => {
           </button>
         </div>
 
-        {/* New Filter Section */}
-        <div className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100/20 dark:border-gray-700/30 p-6">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Advanced Filters
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Refine your booking search
-            </p>
+        {/* Advanced Filters */}
+        <div className="mt-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Advanced Filters
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Refine your booking search
+                </p>
+              </div>
+              <select
+                value={selectedFilters.product}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setSelectedFilters(prev => ({ ...prev, product: newValue }));
+                }}
+                className="w-72 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:text-gray-300"
+              >
+                <option value="">Choose All</option>
+                <option value="Mountain Gorillas">Mountain Gorillas</option>
+                <option value="Golden Monkeys">Golden Monkeys</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* No Slots Filter - Now with count */}
+            {/* No Slots Filter */}
             <button
-              onClick={() => {
-                setSelectedFilters(prev => ({ ...prev, noSlots: !prev.noSlots }));
-                handleCardClick('no_slots');
-              }}
+              onClick={() => handleCardClick('confirmation_requests')}
               className={`relative group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
                 selectedFilters.noSlots
                   ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-900/10'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-red-500 hover:bg-red-50'
               }`}
             >
               <div className="flex items-center space-x-3">
@@ -260,7 +343,7 @@ const Home = () => {
                       ? 'text-red-600 dark:text-red-400'
                       : 'text-gray-500 dark:text-gray-400'
                   }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                   </svg>
                 </div>
                 <span className={`text-sm font-medium ${
@@ -271,44 +354,55 @@ const Home = () => {
               </div>
             </button>
 
-            {/* Product Filter - Now showing total count in dropdown */}
-            <div className="relative">
-              <select
-                value={selectedFilters.product}
-                onChange={(e) => {
-                  setSelectedFilters(prev => ({ ...prev, product: e.target.value }));
-                  if (e.target.value) handleCardClick('product_filter');
-                }}
-                className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:text-gray-300"
-              >
-                <option value="">Select Product</option>
-                {Object.entries(stats.productCounts).map(([product, count]) => (
-                  <option key={product} value={product}>{`${product} (${count})`}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Top Up Due Filter - Now with count */}
+            {/* Unpaid Filter */}
             <button
-              onClick={() => {
-                setSelectedFilters(prev => ({ ...prev, topUpDue: !prev.topUpDue }));
-                handleCardClick('top_up_due');
-              }}
+              onClick={() => handleCardClick('unpaid')}
+              className={`relative group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
+                selectedFilters.unpaid
+                  ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-yellow-500 hover:bg-yellow-50'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-lg ${
+                  selectedFilters.unpaid
+                    ? 'bg-yellow-100 dark:bg-yellow-900/50'
+                    : 'bg-gray-100 dark:bg-gray-800'
+                }`}>
+                  <svg className={`w-5 h-5 ${
+                    selectedFilters.unpaid
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <span className={`text-sm font-medium ${
+                  selectedFilters.unpaid
+                    ? 'text-yellow-700 dark:text-yellow-300'
+                    : 'text-gray-700 dark:text-gray-300'
+                }`}>Unpaid ({stats.unpaid || 0})</span>
+              </div>
+            </button>
+
+            {/* Existing Top Up Due Filter */}
+            <button
+              onClick={() => handleCardClick('top_up_due_bookings')}
               className={`relative group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
                 selectedFilters.topUpDue
-                  ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/10'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50'
               }`}
             >
               <div className="flex items-center space-x-3">
                 <div className={`p-2 rounded-lg ${
                   selectedFilters.topUpDue
-                    ? 'bg-yellow-100 dark:bg-yellow-900/50'
+                    ? 'bg-blue-100 dark:bg-blue-900/50'
                     : 'bg-gray-100 dark:bg-gray-800'
                 }`}>
                   <svg className={`w-5 h-5 ${
                     selectedFilters.topUpDue
-                      ? 'text-yellow-600 dark:text-yellow-400'
+                      ? 'text-blue-600 dark:text-blue-400'
                       : 'text-gray-500 dark:text-gray-400'
                   }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -316,18 +410,15 @@ const Home = () => {
                 </div>
                 <span className={`text-sm font-medium ${
                   selectedFilters.topUpDue
-                    ? 'text-yellow-700 dark:text-yellow-300'
+                    ? 'text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300'
                 }`}>Top Up Due ({stats.topUpDue})</span>
               </div>
             </button>
 
-            {/* Cancelled Filter - Now with count */}
+            {/* Cancelled Filter - Existing */}
             <button
-              onClick={() => {
-                setSelectedFilters(prev => ({ ...prev, cancelled: !prev.cancelled }));
-                handleCardClick('cancelled');
-              }}
+              onClick={() => handleCardClick('cancelled_bookings')}
               className={`relative group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
                 selectedFilters.cancelled
                   ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
@@ -356,12 +447,9 @@ const Home = () => {
               </div>
             </button>
 
-            {/* Amended Filter - Now with count */}
+            {/* Amended Filter - Existing */}
             <button
-              onClick={() => {
-                setSelectedFilters(prev => ({ ...prev, amended: !prev.amended }));
-                handleCardClick('amended');
-              }}
+              onClick={() => handleCardClick('amended_bookings')}
               className={`relative group flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
                 selectedFilters.amended
                   ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'

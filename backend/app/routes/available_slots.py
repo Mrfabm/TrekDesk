@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from ..database import get_db
 from ..models.available_slots import AvailableSlot
+from ..models.golden_monkey_slots import GoldenMonkeySlot
 from ..models.scrape_status import ScrapeStatus
 from ..utils.auth import get_current_user
 from async_panda_headless import scrape_slots
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -15,45 +20,102 @@ class SlotData(BaseModel):
     date: str
     slots: str
 
+def format_relative_time(updated_at):
+    """Format the relative time in a human-readable format"""
+    if not updated_at:
+        return None
+        
+    now = datetime.utcnow()
+    diff = now - updated_at
+    
+    # Get absolute seconds and handle any time synchronization issues
+    seconds = abs(int(diff.total_seconds()))
+    
+    if seconds == 0:
+        return "just now"
+    elif seconds < 60:
+        return f"{seconds} second{'s' if seconds != 1 else ''} ago"
+    elif seconds < 3600:
+        minutes = seconds // 60
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    elif seconds < 86400:  # 24 hours
+        hours = seconds // 3600
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    else:
+        days = seconds // 86400
+        return f"{days} day{'s' if days != 1 else ''} ago"
+
 @router.get("")
 async def get_available_slots(
+    start_date: str = None,
+    end_date: str = None,
+    slot_type: str = "gorilla",
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
-        # Get the latest scrape status
-        latest_status = db.query(ScrapeStatus)\
-            .order_by(ScrapeStatus.last_run.desc())\
-            .first()
-            
-        # Get all slots and convert dates for sorting
-        slots = db.query(AvailableSlot).all()
+        logger.info(f"Fetching slots for type: {slot_type} from {start_date} to {end_date}")
         
-        # Convert to list for sorting
+        # Choose model based on slot type
+        Model = AvailableSlot if slot_type == "gorilla" else GoldenMonkeySlot
+        query = db.query(Model)
+        
+        # Get tomorrow's date in DD/MM/YYYY format
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d/%m/%Y")
+        
+        # Get all slots first
+        slots = query.all()
+        filtered_slots = []
+        
+        for slot in slots:
+            # Convert date strings to datetime objects for comparison
+            slot_date = datetime.strptime(slot.date, "%d/%m/%Y")
+            tomorrow_date = datetime.strptime(tomorrow, "%d/%m/%Y")
+            
+            # Skip if date is before tomorrow
+            if slot_date < tomorrow_date:
+                continue
+                
+            # Apply date range filters if provided
+            if start_date:
+                start_date_obj = datetime.strptime(start_date, "%d/%m/%Y")
+                if slot_date < start_date_obj:
+                    continue
+                    
+            if end_date:
+                end_date_obj = datetime.strptime(end_date, "%d/%m/%Y")
+                if slot_date > end_date_obj:
+                    continue
+                    
+            filtered_slots.append(slot)
+        
+        logger.info(f"Found {len(filtered_slots)} {slot_type} slots")
+        
+        # Convert to list with database timestamps
         slot_list = [
             {
                 "id": slot.id,
                 "date": slot.date,
                 "slots": slot.slots,
-                "created_at": slot.created_at,
-                "updated_at": slot.updated_at
-            } for slot in slots
+                "updated_at": slot.updated_at.strftime("%Y-%m-%d %H:%M:%S") if slot.updated_at else None,
+                "relative_time": format_relative_time(slot.updated_at)
+            } for slot in filtered_slots
         ]
         
         # Sort by date
         slot_list.sort(key=lambda x: datetime.strptime(x["date"], "%d/%m/%Y"))
         
-        response_data = {
+        # Get the most recent update time from all slots
+        most_recent_update = max((slot.updated_at for slot in filtered_slots), default=None)
+        
+        return {
             "slots": slot_list,
-            "last_update": latest_status.last_run if latest_status else None,
-            "status": latest_status.status if latest_status else "unknown"
+            "total": len(slot_list),
+            "last_update": format_relative_time(most_recent_update)
         }
         
-        print("API Response:", response_data)  # Debug log
-        return response_data
-        
     except Exception as e:
-        print("API Error:", str(e))  # Debug log
+        logger.error(f"Error fetching {slot_type} slots: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -193,4 +255,34 @@ async def test_scrape(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Scraping failed: {str(e)}"
+        ) 
+
+@router.post("/trigger-scrape")
+async def trigger_scrape(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manually trigger the scraper"""
+    try:
+        logger.info("Manually triggering scraper")
+        from run_scrapers import run_scrapers
+        
+        # Run the scraper
+        await run_scrapers()
+        
+        # Count slots after scraping
+        gorilla_count = db.query(AvailableSlot).count()
+        monkey_count = db.query(GoldenMonkeySlot).count()
+        
+        return {
+            "message": "Scraping completed",
+            "gorilla_slots": gorilla_count,
+            "monkey_slots": monkey_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error triggering scrape: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         ) 

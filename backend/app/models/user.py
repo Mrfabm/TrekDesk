@@ -3,6 +3,13 @@ from sqlalchemy.orm import relationship
 from . import Base
 import enum
 
+# Import all models to avoid circular dependencies
+from .passport_data import PassportData
+from .booking import Booking
+from .activity_log import ActivityLog
+from .payment import Payment
+from .notification import Notification
+
 class UserRole(enum.Enum):
     USER = "user"
     ADMIN = "admin"
@@ -24,6 +31,7 @@ class User(Base):
     activity_logs = relationship("ActivityLog", back_populates="user")
     validated_payments = relationship("Payment", back_populates="validator")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    passport_data = relationship("PassportData", back_populates="user", uselist=False)
 
     class Config:
         orm_mode = True

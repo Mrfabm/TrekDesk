@@ -4,6 +4,8 @@ import { useTheme } from '../context/ThemeContext';
 import { Switch } from '@headlessui/react';
 import BookingStatusNav from './BookingStatusNav';
 import NotificationCenter from './NotificationCenter';
+import { PassportProvider } from '../context/PassportContext';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
 
 const Layout = ({ children }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -16,11 +18,37 @@ const Layout = ({ children }) => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    sessionStorage.removeItem('passportData'); // Clear passport data on logout
     navigate('/login');
   };
 
   const renderNavItems = () => {
     const role = localStorage.getItem('role');
+
+    if (role === 'superuser') {
+      return (
+        <>
+          <a 
+            href="/users" 
+            className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">User Management</span>
+          </a>
+          <a 
+            href="/settings" 
+            className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            </svg>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">Settings</span>
+          </a>
+        </>
+      );
+    }
 
     if (role === 'finance_admin') {
       return (
@@ -32,7 +60,7 @@ const Layout = ({ children }) => {
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
             </svg>
-            <span>Finance Dashboard</span>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">Finance Dashboard</span>
           </a>
           <a 
             href="/bookings" 
@@ -41,7 +69,7 @@ const Layout = ({ children }) => {
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            <span>View Bookings</span>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">View Bookings</span>
           </a>
           <a 
             href="/finance/pending" 
@@ -50,24 +78,32 @@ const Layout = ({ children }) => {
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Pending Payments</span>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">Pending Payments</span>
           </a>
           <a 
-            href="/finance/overdue" 
+            href="/settings" 
             className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             </svg>
-            <span>Overdue Payments</span>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">Settings</span>
           </a>
         </>
       );
     }
 
-    // Return navigation items for admin and regular users
     return (
       <>
+        <a 
+          href="/create-booking" 
+          className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span className="group-hover:translate-x-1 transition-transform duration-200">Create Booking</span>
+        </a>
         <a 
           href="/bookings" 
           className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
@@ -75,16 +111,32 @@ const Layout = ({ children }) => {
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
-          <span>View Bookings</span>
+          <span className="group-hover:translate-x-1 transition-transform duration-200">View Bookings</span>
         </a>
         <a 
           href="/available-slots" 
           className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Available Slots</span>
+          <span className="group-hover:translate-x-1 transition-transform duration-200">Available Slots</span>
+        </a>
+        <a 
+          href="/passport-management" 
+          className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+          </svg>
+          <span className="group-hover:translate-x-1 transition-transform duration-200">Passport Management</span>
+        </a>
+        <a 
+          href="/voucher-management" 
+          className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
+        >
+          <DocumentTextIcon className="h-6 w-6" />
+          <span className="group-hover:translate-x-1 transition-transform duration-200">Voucher Management</span>
         </a>
       </>
     );
@@ -119,43 +171,7 @@ const Layout = ({ children }) => {
             <span className="group-hover:translate-x-1 transition-transform duration-200">Home</span>
           </a>
 
-          {/* Only show Create Booking for non-finance admin users */}
-          {userRole !== 'finance_admin' && (
-            <a 
-              href="/create-booking" 
-              className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="group-hover:translate-x-1 transition-transform duration-200">Create Booking</span>
-            </a>
-          )}
-
           {renderNavItems()}
-
-          <a 
-            href="/settings" 
-            className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md transition-all duration-200 ease-in-out transform hover:scale-105"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="group-hover:translate-x-1 transition-transform duration-200">Settings</span>
-          </a>
-
-          {userRole === 'superuser' && (
-            <a 
-              href="/users" 
-              className="group py-3 px-4 flex items-center space-x-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-md transition-all duration-200 ease-in-out transform hover:scale-105"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-              <span className="group-hover:translate-x-1 transition-transform duration-200">User Management</span>
-            </a>
-          )}
         </nav>
 
         {/* Profile Section - Moved up and styled with orange */}
@@ -263,7 +279,9 @@ const Layout = ({ children }) => {
 
         {/* Main Content */}
         <main className="py-6 px-4 mt-16">
-          {children}
+          <PassportProvider>
+            {children}
+          </PassportProvider>
         </main>
       </div>
     </div>

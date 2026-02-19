@@ -1,61 +1,49 @@
 import asyncio
-from fastapi import FastAPI
+import uvicorn
+import logging
+from datetime import datetime
+from app.main import app
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from async_panda_headless import scrape_slots
-import uvicorn
-from app.database import Base, engine
-from main import app
-import logging
-from contextlib import asynccontextmanager
+from run_scrapers import run_scrapers  # Import the correct function
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-print("Creating database tables...")
-Base.metadata.create_all(bind=engine)
+# Create scheduler
+scheduler = AsyncIOScheduler()
 
-scheduler = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    global scheduler
-    scheduler = AsyncIOScheduler()
-    
+async def scheduled_scrape():
+    """Run scrapers and log the result"""
+    logger.info(f"Starting scheduled scrape at {datetime.now()}")
     try:
-        logger.info("Initializing scheduler...")
-        # Run initial scrape
-        logger.info("Running initial scrape...")
-        await scrape_slots()
-        
-        # Schedule recurring scrapes
-        scheduler.add_job(
-            scrape_slots,
-            trigger=IntervalTrigger(minutes=10),
-            id='scrape_slots',
-            name='Scrape available slots every 10 minutes',
-            replace_existing=True,
-            misfire_grace_time=None,
-            max_instances=1,
-            coalesce=True
-        )
-        
-        scheduler.start()
-        logger.info("Scheduler started successfully")
-        yield
+        await run_scrapers()  # Use the correct function
+        logger.info("Scheduled scrape completed successfully")
     except Exception as e:
-        logger.error(f"Error initializing scheduler: {e}")
-        yield
-    finally:
-        # Shutdown
-        if scheduler:
-            logger.info("Shutting down scheduler...")
-            scheduler.shutdown()
+        logger.error(f"Scheduled scrape failed: {str(e)}")
 
-app.router.lifespan_context = lifespan
+def start_scheduler():
+    """Start the scheduler with a 30-minute interval"""
+    scheduler.add_job(
+        scheduled_scrape,
+        trigger=IntervalTrigger(minutes=30),
+        next_run_time=datetime.now()  # Run immediately on startup
+    )
+    scheduler.start()
+    logger.info("Scheduler started - will scrape every 30 minutes")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    # Start the scheduler
+    start_scheduler()
+    
+    # Run the FastAPI server
+    uvicorn.run(
+        "app.main:app",  # Use string format for reload to work properly
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    ) 

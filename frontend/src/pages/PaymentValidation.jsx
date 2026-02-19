@@ -7,7 +7,7 @@ const PaymentValidation = () => {
   const [bookingDetails, setBookingDetails] = useState(null);
   const [formData, setFormData] = useState({
     amount_received: '',
-    validation_status: 'pending',
+    validation_status: '',
     validation_notes: '',
   });
   const [error, setError] = useState('');
@@ -49,6 +49,7 @@ const PaymentValidation = () => {
   }, [bookingId]);
 
   const getValidationStatusOptions = () => [
+    { value: '', label: 'Select validation status' },
     { value: 'ok_to_purchase_full', label: 'OK to Purchase (Full Payment)' },
     { value: 'ok_to_purchase_deposit', label: 'OK to Purchase (Deposit)' },
     { value: 'do_not_purchase', label: 'Do Not Purchase' },
@@ -56,15 +57,14 @@ const PaymentValidation = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setSuccess('');
+    
     try {
-      // Debug log: Form submission
-      console.log('=== Payment Validation Form Submission ===');
-      console.log('Form data:', {
-        booking_id: bookingId,
-        amount_received: formData.amount_received,
-        validation_status: formData.validation_status,
-        validation_notes: formData.validation_notes
-      });
+      if (!formData.validation_status) {
+        setError('Please select a validation status');
+        return;
+      }
 
       const response = await fetch('http://localhost:8000/api/finance/validate-payment', {
         method: 'POST',
@@ -80,24 +80,39 @@ const PaymentValidation = () => {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
-        // Debug log: Response data
-        console.log('=== Validation Response ===');
-        console.log('Response data:', data);
         setSuccess('Payment validated successfully');
-        setTimeout(() => {
-          navigate('/bookings');
-        }, 2000);
+        // Force immediate refresh of bookings list
+        window.dispatchEvent(new Event('booking-updated'));
+        setTimeout(() => navigate('/bookings'), 1000);
       } else {
-        const errorData = await response.json();
-        console.error('Validation failed:', errorData);
-        setError(errorData.detail || 'Failed to update payment');
+        setError(data.detail || 'Failed to validate payment');
       }
     } catch (error) {
-      console.error('Error during validation:', error);
-      setError('Failed to update payment');
+      console.error('Error validating payment:', error);
+      setError('Failed to validate payment. Please try again.');
     }
+  };
+
+  // Add this function to determine if payment is already validated
+  const isPaymentValidated = (bookingDetails) => {
+    // Only hide button if payment is fully paid AND validation status is ok_to_purchase_full
+    if (bookingDetails && formData.validation_status) {
+      const totalAmount = bookingDetails.unit_cost * bookingDetails.number_of_people;
+      const isFullyPaid = parseFloat(formData.amount_received) >= totalAmount;
+      const isFullyValidated = formData.validation_status === 'ok_to_purchase_full';
+      
+      // Never hide the button - always allow updates
+      return false;
+    }
+    return false;
+  };
+
+  // Helper function to determine if there's a previous payment
+  const hasPreviousPayment = () => {
+    return bookingDetails && parseFloat(bookingDetails.amount_received) > 0;
   };
 
   // Helper function to determine payment status based on amount received
@@ -260,11 +275,12 @@ const PaymentValidation = () => {
             </div>
           )}
 
+          {/* Always show the buttons */}
           <div className="flex justify-end space-x-4">
             <button
               type="button"
-              onClick={() => navigate('/finance')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              onClick={() => navigate('/bookings')}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
             >
               Cancel
             </button>
@@ -272,7 +288,7 @@ const PaymentValidation = () => {
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
-              Validate Payment
+              {hasPreviousPayment() ? 'Update Payment/Validation' : 'Validate Payment'}
             </button>
           </div>
         </form>

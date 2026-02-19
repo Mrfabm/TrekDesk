@@ -611,15 +611,39 @@ const Dashboard = () => {
   }, []);
 
   // Handlers
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
+  const handleInputChange = async (field, value) => {
+    const updatedFormData = {
+      ...formData,
       [field]: value
-    }));
+    };
+    setFormData(updatedFormData);
 
-    if ((field === 'site' || field === 'product' || field === 'date') &&
-        formData.site && formData.product && formData.date) {
-      setAvailableSlots(Math.floor(Math.random() * 97));
+    if ((field === 'date' || field === 'site' || field === 'product') &&
+        updatedFormData.site && updatedFormData.product && updatedFormData.date) {
+      try {
+        const date = field === 'date' ? value : updatedFormData.date;
+        const formattedDate = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+
+        // Determine slot type based on product
+        const slotType = updatedFormData.product.toLowerCase().includes('monkey') ? 'monkey' : 'gorilla';
+        
+        const response = await fetch(`http://localhost:8000/api/available-slots?date=${formattedDate}&slot_type=${slotType}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const slotData = data.slots.find(slot => slot.date === formattedDate);
+          if (slotData) {
+            const slots = slotData.slots === 'Sold Out' ? 0 : parseInt(slotData.slots);
+            setAvailableSlots(slots);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching available slots:', error);
+      }
     }
   };
 

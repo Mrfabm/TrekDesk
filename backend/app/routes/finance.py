@@ -62,17 +62,12 @@ async def validate_payment(
     db: Session = Depends(get_db)
 ):
     try:
-        # Debug log: Incoming data
-        print(f"\n=== Validation Request ===")
-        print(f"Incoming payment data: {payment_data}")
-        print(f"Validation status received: {payment_data.validation_status}")
-        
         if current_user.role != UserRole.FINANCE_ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only finance admins can validate payments"
             )
-        
+
         booking = (
             db.query(Booking)
             .filter(Booking.id == payment_data.booking_id)
@@ -80,17 +75,23 @@ async def validate_payment(
         )
         
         if not booking:
-            raise HTTPException(status_code=404, detail="Booking not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Booking not found"
+            )
+        
+        # Validate the validation status
+        if payment_data.validation_status not in [status.value for status in ValidationStatus]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid validation status. Must be one of: {[status.value for status in ValidationStatus]}"
+            )
         
         # Get or create payment record
         payment = db.query(Payment).filter(Payment.booking_id == payment_data.booking_id).first()
         if not payment:
             payment = Payment(booking_id=payment_data.booking_id)
             db.add(payment)
-        
-        # Debug log: Before updating payment
-        print(f"\n=== Before Update ===")
-        print(f"Current payment status: {payment.validation_status if payment else 'No payment record'}")
         
         # Update payment details
         payment.deposit_paid = Decimal(str(payment_data.amount_received))
@@ -99,49 +100,48 @@ async def validate_payment(
         payment.validated_by = current_user.id
         payment.validated_at = datetime.utcnow()
         
-        # Debug log: After updating payment
-        print(f"\n=== After Update ===")
-        print(f"Updated validation status: {payment.validation_status}")
-        
-        # Update booking status
+        # Update booking status to confirmed
         booking.status = BookingStatus.CONFIRMED
         
+        # Calculate payment status
+        total_amount = booking.product.unit_cost * booking.number_of_people
+        if payment.deposit_paid >= total_amount:
+            payment.payment_status = PaymentStatus.FULLY_PAID
+        elif payment.deposit_paid > 0:
+            payment.payment_status = PaymentStatus.DEPOSIT_PAID
+        else:
+            payment.payment_status = PaymentStatus.PENDING
+        
         db.commit()
-        db.refresh(payment)
-        db.refresh(booking)
         
-        # Debug log: After commit
-        print(f"\n=== After Commit ===")
-        print(f"Final payment validation status: {payment.validation_status}")
-        print(f"Final booking status: {booking.status}")
+        # Create notification for admin
+        create_notification(
+            db=db,
+            user_id=booking.user_id,
+            type="payment_validation",
+            message=f"Your payment for booking {booking.booking_name} has been validated. Status: {payment_data.validation_status}",
+            data={"booking_id": booking.id, "validation_status": payment_data.validation_status}
+        )
         
-        # Create notification for admin with exact same status
-        admins = db.query(User).filter(User.role == UserRole.ADMIN).all()
-        for admin in admins:
-            create_notification(
-                db=db,
-                user_id=admin.id,
-                type="validation_result",
-                message=f"Finance validation completed for {booking.booking_name}",
-                data={
-                    "booking_name": booking.booking_name,
-                    "status": payment_data.validation_status,  # Pass through exactly
-                    "notes": payment_data.validation_notes
-                }
-            )
-        
+        # Return the exact validation status that was set
         return {
-            "message": "Payment validated successfully",
-            "booking_status": booking.status.value,
-            "validation_status": payment.validation_status
+            "validation_status": payment_data.validation_status,
+            "payment_status": payment.payment_status.value,
+            "amount_received": float(payment.deposit_paid),
+            "total_amount": float(total_amount)
         }
+        
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         db.rollback()
-        print(f"\n=== Error in validate_payment ===")
-        print(f"Error details: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating payment: {str(e)}"
+            detail=str(e)
         )
 
 @router.get("/pending-validations")

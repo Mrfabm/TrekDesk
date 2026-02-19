@@ -48,6 +48,7 @@ const Bookings = () => {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('Bookings data:', data); // Debug log to check validation_status
         setBookings(data);
       }
     } catch (error) {
@@ -77,6 +78,16 @@ const Bookings = () => {
             case 'do_not_purchase':
               return booking.validation_status === 'do_not_purchase' && 
                      booking.status === 'confirmed';
+            case 'unpaid':
+              return (!booking.payment_status || booking.payment_status === 'pending') && 
+                     booking.payment_status !== 'fully_paid';
+            case 'top_up_due':
+              const trekkingDate = new Date(booking.date);
+              const today = new Date();
+              const daysUntilTrek = Math.ceil((trekkingDate - today) / (1000 * 60 * 60 * 24));
+              return (booking.payment_status !== 'fully_paid' && 
+                     booking.validation_status !== 'ok_to_purchase_full' &&
+                     daysUntilTrek <= 45 && daysUntilTrek > 0);
             default:
               return true;
           }
@@ -104,41 +115,35 @@ const Bookings = () => {
     if (status === 'confirmed') {
       switch (validationStatus) {
         case 'ok_to_purchase_full':
-          return 'bg-green-100 text-green-800';
+          return 'bg-green-50 text-green-600 text-xs';
         case 'ok_to_purchase_deposit':
-          return 'bg-yellow-100 text-yellow-800';
+          return 'bg-yellow-50 text-yellow-600 text-xs';
         case 'do_not_purchase':
-          return 'bg-red-100 text-red-800';
+          return 'bg-red-50 text-red-600 text-xs';
         default:
-          return 'bg-gray-100 text-gray-800';
+          return 'bg-gray-50 text-gray-600 text-xs';
       }
     }
 
     // Otherwise use booking status colors
     switch (status) {
       case 'provisional':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-50 text-gray-600 text-xs';
       case 'requested':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-50 text-yellow-600 text-xs';
       case 'validation_request':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-50 text-blue-600 text-xs';
       case 'confirmed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-50 text-green-600 text-xs';
       case 'rejected':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-50 text-red-600 text-xs';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-50 text-gray-600 text-xs';
     }
   };
 
   const getStatusText = (status, validationStatus) => {
-    if (role === 'admin' && status === 'confirmed') {
-      return 'OK';  // Show just "OK" for admin when confirmed
-    } else if (role === 'admin' && status === 'validation_request') {
-      return 'PENDING';  // Show "PENDING" while waiting for finance
-    }
-
-    // For other roles or statuses, show the detailed status
+    // For admin viewing confirmed bookings with validation status
     if (status === 'confirmed' && validationStatus) {
       switch (validationStatus) {
         case 'ok_to_purchase_full':
@@ -156,144 +161,127 @@ const Bookings = () => {
 
   // Add this function to handle different validation statuses
   const getActionButton = (row) => {
-    const bookingFilter = localStorage.getItem('bookingFilter');
-    
-    if (role === 'admin') {
-      // If we're viewing filtered results, only show relevant actions
-      switch(bookingFilter) {
-        case 'confirmation_requests':
-          return (
-            <button
-              onClick={() => handleSendToFinance(row.id)}
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Send to Finance
-            </button>
-          );
-        case 'ok_to_purchase_full':
-          return (
-            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-              Full Payment Approved
-            </span>
-          );
-        case 'ok_to_purchase_deposit':
-          return (
-            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-              Deposit Approved
-            </span>
-          );
-        case 'do_not_purchase':
-          return (
-            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-              Not Approved
-            </span>
-          );
-        default:
-          // If no filter, show normal action buttons based on status
-          return getDefaultActionButton(row);
-      }
-    }
-    return getDefaultActionButton(row);
-  };
+    if (role === 'finance_admin') {
+      const totalAmount = parseFloat(row.total_amount) || 0;
+      const amountReceived = parseFloat(row.amount_received) || 0;
 
-  // Move the original action button logic to a new function
-  const getDefaultActionButton = (row) => {
-    if (role === 'admin') {
-      switch (row.status) {
-        case 'requested':
-          return (
-            <button
-              onClick={() => handleSendToFinance(row.id)}
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Send to Finance
-            </button>
-          );
-        case 'validation_request':
-          return (
-            <span className="text-yellow-600 font-medium">
-              Pending Finance Review
-            </span>
-          );
-        case 'confirmed':
-          if (row.validation_status === 'ok_to_purchase_full') {
-            return (
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                Full Payment Approved
-              </span>
-            );
-          } else if (row.validation_status === 'ok_to_purchase_deposit') {
-            return (
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                Deposit Approved
-              </span>
-            );
-          } else if (row.validation_status === 'do_not_purchase') {
-            return (
-              <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                Not Approved
-              </span>
-            );
-          }
-          return null;
-        case 'rejected':
-          return (
-            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-              Rejected
-            </span>
-          );
-        default:
-          return (
-            <div className="flex space-x-2">
-              <button
-                onClick={() => handleEditBooking(row)}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDeleteBooking(row.id)}
-                className="text-red-600 hover:text-red-800 font-medium"
-              >
-                Delete
-              </button>
-            </div>
-          );
+      if (row.payment_status === 'fully_paid') {
+        return (
+          <span className="px-2 py-1 bg-green-50 text-green-600 rounded text-xs font-medium">
+            Fully Paid
+          </span>
+        );
+      } else if (row.payment_status === 'deposit_paid') {
+        return (
+          <span className="px-2 py-1 bg-yellow-50 text-yellow-600 rounded text-xs font-medium">
+            Partially Paid
+          </span>
+        );
       }
-    } else if (role === 'user') {
-      // Add actions for regular users
+      
+      return (
+        <button
+          onClick={() => navigate(`/finance/validate/${row.id}`)}
+          className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded text-xs font-medium hover:bg-blue-100 transition-colors"
+        >
+          {row.payment_status === 'pending' ? 'Validate Payment' : 'Update Payment'}
+        </button>
+      );
+    }
+
+    if (role === 'admin') {
+      // For admin, show action buttons based on validation status
+      if (row.validation_status) {
+        switch (row.validation_status) {
+          case 'ok_to_purchase_full':
+            return (
+              <div className="flex flex-col space-y-1">
+                <button
+                  onClick={() => navigate('/passport-management')}
+                  className="px-3 py-1.5 bg-green-50 text-green-600 rounded text-xs font-medium hover:bg-green-100 transition-colors"
+                >
+                  Purchase Permits Full
+                </button>
+                {row.validation_notes && (
+                  <span className="text-xs text-gray-500">
+                    Note: {row.validation_notes}
+                  </span>
+                )}
+              </div>
+            );
+          case 'ok_to_purchase_deposit':
+            return (
+              <div className="flex flex-col space-y-1">
+                <button
+                  onClick={() => navigate('/passport-management')}
+                  className="px-3 py-1.5 bg-yellow-50 text-yellow-600 rounded text-xs font-medium hover:bg-yellow-100 transition-colors"
+                >
+                  Purchase Permits Deposit
+                </button>
+                {row.validation_notes && (
+                  <span className="text-xs text-gray-500">
+                    Note: {row.validation_notes}
+                  </span>
+                )}
+              </div>
+            );
+          case 'do_not_purchase':
+            return (
+              <div className="flex flex-col space-y-1">
+                <button
+                  onClick={() => handleSendPaymentRequest(row.id)}
+                  className="px-3 py-1.5 bg-red-50 text-red-600 rounded text-xs font-medium hover:bg-red-100 transition-colors"
+                >
+                  Send Payment Request to User
+                </button>
+                {row.validation_notes && (
+                  <span className="text-xs text-gray-500">
+                    Note: {row.validation_notes}
+                  </span>
+                )}
+              </div>
+            );
+          default:
+            return null;
+        }
+      }
+      return null;
+    }
+
+    // User view - Add this section
+    if (role === 'user') {
       switch (row.status) {
         case 'provisional':
           return (
             <button
               onClick={() => handleRequestConfirmation(row.id)}
-              className="text-green-600 hover:text-green-800 font-medium"
+              className="px-3 py-1.5 bg-green-50 text-green-600 rounded text-xs font-medium hover:bg-green-100 transition-colors"
             >
               Request Confirmation
             </button>
           );
         case 'requested':
           return (
-            <span className="text-yellow-600 font-medium">
+            <span className="px-2 py-1 bg-yellow-50 text-yellow-600 rounded text-xs font-medium">
               Confirmation Requested
             </span>
           );
         case 'validation_request':
           return (
-            <span className="text-blue-600 font-medium">
+            <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-medium">
               Under Finance Review
             </span>
           );
         case 'confirmed':
           if (row.validation_status === 'ok_to_purchase_full') {
             return (
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+              <span className="px-2 py-1 bg-green-50 text-green-600 rounded text-xs font-medium">
                 Ready for Full Payment
               </span>
             );
           } else if (row.validation_status === 'ok_to_purchase_deposit') {
             return (
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
+              <span className="px-2 py-1 bg-yellow-50 text-yellow-600 rounded text-xs font-medium">
                 Ready for Deposit
               </span>
             );
@@ -301,174 +289,108 @@ const Bookings = () => {
           break;
         case 'rejected':
           return (
-            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm">
+            <span className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs font-medium">
               Not Approved
             </span>
           );
-        default:
-          return null;
       }
     }
+    
     return null;
   };
 
+  // Add this to ensure immediate updates
+  useEffect(() => {
+    const handleBookingUpdate = () => {
+      console.log('Booking updated, refreshing...');
+      fetchBookings();
+    };
+    
+    window.addEventListener('booking-updated', handleBookingUpdate);
+    return () => window.removeEventListener('booking-updated', handleBookingUpdate);
+  }, []);
+
   // Different column configurations based on user role
   const getColumns = () => {
-    if (role === 'finance_admin') {
-      return [
-        { 
-          key: 'booking_name', 
-          label: 'Booking Name',
-          render: (value, row) => (
-            <div>
-              <div className="font-medium">{value}</div>
-              <div className="text-sm text-gray-500">
-                {row.product} × {row.number_of_people}
-              </div>
-            </div>
-          )
-        },
-        { 
-          key: 'unit_cost', 
-          label: 'Unit Cost',
-          render: (value) => formatCurrency(value)
-        },
-        { 
-          key: 'total_amount', 
-          label: 'Total Amount',
-          render: (value) => formatCurrency(value)
-        },
-        { 
-          key: 'amount_received', 
-          label: 'Amount Received',
-          render: (value) => formatCurrency(value || 0)
-        },
-        { 
-          key: 'balance', 
-          label: 'Balance',
-          render: (value) => (
-            <span className={`${value > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {formatCurrency(value)}
-            </span>
-          )
-        },
-        {
-          key: 'actions',
-          label: 'Actions',
-          render: (_, row) => (
-            <button
-              onClick={() => navigate(`/finance/validate/${row.id}`)}
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Update Payment
-            </button>
-          )
-        }
-      ];
-    }
-
-    // Return columns for admin and regular users
-    return [
-      { 
-        key: 'booking_name', 
-        label: 'Name',
-        render: (value, row) => `${value} × ${row.number_of_people}`
-      },
-      { 
-        key: 'site', 
-        label: 'Location',
-      },
-      { 
-        key: 'date', 
-        label: 'Date',
-        render: (value) => value ? new Date(value).toLocaleDateString() : 'N/A'
+    const baseColumns = [
+      {
+        header: 'Booking ID',
+        accessor: 'id',
+        cell: (value) => (
+          <span className="text-xs text-gray-900">{value}</span>
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
       },
       {
-        key: 'available_slots',
-        label: 'Slots',
-        render: (value) => value || 'N/A'
+        header: 'Product',
+        accessor: 'product',
+        cell: (value) => (
+          <span className="text-xs text-gray-900">{value}</span>
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
       },
-      { 
-        key: 'status', 
-        label: 'Status',
-        render: (value, row) => (
-          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(value, row.validation_status)}`}>
+      {
+        header: 'Date',
+        accessor: 'date',
+        cell: (value) => (
+          <span className="text-xs text-gray-900">
+            {new Date(value).toLocaleDateString()}
+          </span>
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
+      },
+      {
+        header: 'Status',
+        accessor: 'status',
+        cell: (value, row) => (
+          <span className={`inline-flex px-2 py-1 rounded ${getStatusBadgeColor(value, row.validation_status)}`}>
             {getStatusText(value, row.validation_status)}
           </span>
-        )
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
       },
       {
-        key: 'actions',
-        label: 'Actions',
-        render: (_, row) => {
-          if (role === 'admin') {
-            switch (row.status) {
-              case 'requested':
-                return (
-                  <button
-                    onClick={() => handleSendToFinance(row.id)}
-                    className="text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Send to Finance
-                  </button>
-                );
-              case 'validation_request':
-                return (
-                  <span className="text-yellow-600 font-medium">
-                    Pending Finance Review
-                  </span>
-                );
-              case 'confirmed':
-                if (row.validation_status === 'ok_to_purchase_full') {
-                  return (
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                      Full Payment Approved
-                    </span>
-                  );
-                } else if (row.validation_status === 'ok_to_purchase_deposit') {
-                  return (
-                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                      Deposit Approved
-                    </span>
-                  );
-                } else if (row.validation_status === 'do_not_purchase') {
-                  return (
-                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                      Not Approved
-                    </span>
-                  );
-                }
-                return null;
-              case 'rejected':
-                return (
-                  <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                    Rejected
-                  </span>
-                );
-              default:
-                return (
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleEditBooking(row)}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteBooking(row.id)}
-                      className="text-red-600 hover:text-red-800 font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                );
-            }
-          } else {
-            return getActionButton(row);  // Existing action button for regular users
-          }
-        }
+        header: 'Amount',
+        accessor: 'total_amount',
+        cell: (value) => (
+          <span className="text-xs text-gray-900">
+            {formatCurrency(value)}
+          </span>
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
       }
     ];
+
+    // Add Actions column for all roles
+    baseColumns.push({
+      header: 'Actions',
+      accessor: 'actions',
+      cell: (_, row) => getActionButton(row),
+      headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+      cellClassName: 'whitespace-nowrap px-3 py-2'
+    });
+
+    // Add Amount Received column for finance_admin
+    if (role === 'finance_admin') {
+      baseColumns.splice(5, 0, {
+        header: 'Amount Received',
+        accessor: 'amount_received',
+        cell: (value) => (
+          <span className="text-xs text-gray-900">
+            {formatCurrency(value || 0)}
+          </span>
+        ),
+        headerClassName: 'text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-3',
+        cellClassName: 'whitespace-nowrap px-3 py-2'
+      });
+    }
+
+    return baseColumns;
   };
 
   // Add handlers for status changes
@@ -480,8 +402,10 @@ const Bookings = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
+      
       if (response.ok) {
-        fetchBookings(); // Refresh the bookings list
+        // Immediately refresh the bookings list to show the updated status
+        fetchBookings();
       } else {
         console.error('Failed to request confirmation:', await response.json());
       }
@@ -531,11 +455,61 @@ const Bookings = () => {
     }
   };
 
+  // Inside the Bookings component, update the getActionStatus function
+  const getActionStatus = (booking) => {
+    const status = booking.validation_status;
+    if (!status) return (
+      <span className="text-gray-600 dark:text-gray-400">
+        Pending
+      </span>
+    );
+
+    const statusColors = {
+      'ok_to_purchase_full': 'text-green-600 dark:text-green-400',
+      'ok_to_purchase_deposit': 'text-yellow-600 dark:text-yellow-400',
+      'do_not_purchase': 'text-red-600 dark:text-red-400'
+    };
+
+    const statusText = {
+      'ok_to_purchase_full': 'OK to Purchase (Full)',
+      'ok_to_purchase_deposit': 'OK to Purchase (Deposit)',
+      'do_not_purchase': 'Do Not Purchase'
+    };
+
+    return (
+      <span className={`font-medium ${statusColors[status]}`}>
+        {statusText[status]}
+      </span>
+    );
+  };
+
+  const handleSendPaymentRequest = async (bookingId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/bookings/${bookingId}/payment-request`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        // Show success message
+        alert('Payment request sent successfully');
+      } else {
+        throw new Error('Failed to send payment request');
+      }
+    } catch (error) {
+      console.error('Error sending payment request:', error);
+      alert('Failed to send payment request');
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bookings</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+    <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className="mb-4">
+        <h1 className="text-lg font-medium text-gray-900 dark:text-white">Bookings</h1>
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
           {role === 'finance_admin' ? 'Manage and validate payments' : 'View your bookings'}
         </p>
       </div>

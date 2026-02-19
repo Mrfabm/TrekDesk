@@ -36,40 +36,30 @@ async def create_booking(
     current_user: User = Depends(verify_booking_access),
     db: Session = Depends(get_db)
 ):
-    # Check if user has correct role
-    if current_user.role not in [UserRole.ADMIN, UserRole.USER]:  # Use enum values
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admin and users can create bookings"
-        )
-
-    # Validate status
-    if booking_data.status not in ['provisional', 'confirmed']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status must be either 'provisional' or 'confirmed'"
-        )
-
-    # Get site
-    site = db.query(Site).filter(Site.name == booking_data.site).first()
+    # First, find the site and product
+    site = db.query(Site).join(Product).filter(
+        Product.name == booking_data.product
+    ).first()
+    
     if not site:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Site not found"
+            detail="Site not found for the given product"
         )
-
-    # Get product
+    
+    # Find the specific product
     product = db.query(Product).filter(
-        Product.site_id == site.id,
-        Product.name == booking_data.product
+        Product.name == booking_data.product,
+        Product.site_id == site.id
     ).first()
+    
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found"
         )
 
-    # Create booking without checking for existing bookings
+    # Create the booking
     booking = Booking(
         date=booking_data.date,
         booking_name=booking_data.booking_name,
@@ -80,27 +70,17 @@ async def create_booking(
         product_id=product.id,
         available_slots=booking_data.available_slots
     )
-
+    
+    db.add(booking)
     try:
-        db.add(booking)
         db.commit()
         db.refresh(booking)
-
-        # Format response to match Summary table exactly
-        return {
-            "booking_name": booking.booking_name,
-            "number_of_people": booking.number_of_people,
-            "date": booking.date,
-            "product": product.name,
-            "available_slots": booking.available_slots,
-            "status": "Provisional",
-            "created_at": booking.created_at
-        }
+        return booking
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating booking: {str(e)}"
+            detail=str(e)
         )
 
 @router.get("")
@@ -135,7 +115,8 @@ async def get_bookings(
         "balance": float((booking.product.unit_cost * booking.number_of_people) - 
                         (booking.payment.deposit_paid if booking.payment else 0)),
         "payment_status": booking.payment.payment_status.value if booking.payment else None,
-        "validation_status": booking.payment.validation_status.value if booking.payment else None
+        "validation_status": booking.payment.validation_status.value if booking.payment and booking.payment.validation_status else None,
+        "action_status": booking.payment.validation_status.value.replace('_', ' ').title() if booking.payment and booking.payment.validation_status else "Pending"
     } for booking in bookings]
 
 @router.get("/my-bookings")

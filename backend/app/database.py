@@ -1,23 +1,21 @@
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-import urllib.parse
 
+# Load environment variables
 load_dotenv()
 
-# Get database URL from environment variable and encode password
-db_url = os.getenv("DATABASE_URL")
-if not db_url:
-    raise ValueError("DATABASE_URL environment variable is not set")
-
-engine = create_engine(
-    db_url,
-    echo=True,  # Set to False in production
-    pool_pre_ping=True
+# Get database URL from environment variable or use default
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:admin@localhost:5432/booking_db"  # Use your actual password here
 )
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 def get_db():
