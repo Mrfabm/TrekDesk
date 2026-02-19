@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import EnhancedTable from '../components/EnhancedTable';
+import axios from '../utils/axios';
 
 const getRelativeTime = (date) => {
   if (!date) return 'N/A';
   const dbTime = new Date(date + 'Z');
   const now = new Date();
   const diffInMinutes = Math.floor((now - dbTime) / (1000 * 60));
-  
+
   if (diffInMinutes < 1) return 'Just now';
   if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-  
+
   const diffInHours = Math.floor(diffInMinutes / 60);
   if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-  
+
   return dbTime.toLocaleString();
 };
 
@@ -21,21 +22,25 @@ const GoldenMonkeySlots = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const pollingRef = useRef(null);
+  const pollingTimeoutRef = useRef(null);
+
+  const stopPolling = () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current);
+    pollingRef.current = null;
+    pollingTimeoutRef.current = null;
+  };
 
   const fetchSlots = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/golden-monkey-slots', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSlots(data.slots || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch slots:', error);
+      const { data } = await axios.get('/golden-monkey-slots');
+      setSlots(data.slots || []);
+      setLastUpdate(data.last_update || null);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch slots:', err);
       setError('Failed to load Golden Monkey slots data');
     } finally {
       setLoading(false);
@@ -46,27 +51,19 @@ const GoldenMonkeySlots = () => {
     try {
       setIsUpdating(true);
       setError(null);
-      
-      const response = await fetch('http://localhost:8000/api/golden-monkey-slots/trigger-scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to trigger scrape');
-      }
-      
-      // Poll for updates
-      const interval = setInterval(fetchSlots, 5000);
-      setTimeout(() => {
-        clearInterval(interval);
+
+      await axios.post('/golden-monkey-slots/trigger-scrape');
+
+      // Poll every 5 seconds for up to 5 minutes
+      pollingRef.current = setInterval(fetchSlots, 5000);
+      pollingTimeoutRef.current = setTimeout(() => {
+        stopPolling();
         setIsUpdating(false);
-      }, 30000);
-      
-    } catch (error) {
-      setError('Failed to update slots data');
+      }, 5 * 60 * 1000);
+
+    } catch (err) {
+      console.error('Failed to trigger scrape:', err);
+      setError('Failed to start slot update. Please try again.');
       setIsUpdating(false);
     }
   };
@@ -74,7 +71,10 @@ const GoldenMonkeySlots = () => {
   useEffect(() => {
     fetchSlots();
     const interval = setInterval(fetchSlots, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      stopPolling();
+    };
   }, []);
 
   const columns = [
@@ -95,8 +95,8 @@ const GoldenMonkeySlots = () => {
       label: 'Available Slots',
       render: (value) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          value === 'Sold Out' 
-            ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' 
+          value === 'Sold Out'
+            ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
             : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
         }`}>
           {value}
@@ -129,10 +129,19 @@ const GoldenMonkeySlots = () => {
         </p>
       </div>
 
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Total dates: {slots.length}
+            <span>Total dates: {slots.length}</span>
+            {lastUpdate && (
+              <span className="ml-4 text-gray-400">Last updated: {lastUpdate}</span>
+            )}
           </div>
           <button
             onClick={triggerScrape}
@@ -142,7 +151,7 @@ const GoldenMonkeySlots = () => {
             {isUpdating ? 'Updating...' : 'Update Now'}
           </button>
         </div>
-        <EnhancedTable 
+        <EnhancedTable
           data={slots}
           columns={columns}
         />
@@ -151,4 +160,4 @@ const GoldenMonkeySlots = () => {
   );
 };
 
-export default GoldenMonkeySlots; 
+export default GoldenMonkeySlots;
