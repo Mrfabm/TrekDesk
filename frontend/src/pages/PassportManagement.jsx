@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PassportUploader from '../components/PassportReader/PassportUploader';
 import PassportForm from '../components/PassportReader/PassportForm';
 import { usePassport } from '../context/PassportContext';
@@ -8,6 +9,7 @@ const PassportManagement = () => {
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { passportDataList, extractionStatus, clearPassportData, updatePassportData } = usePassport();
+  const navigate = useNavigate();
 
   const handleUploadComplete = (uploadedFiles) => {
     console.log('Upload complete:', uploadedFiles);
@@ -47,7 +49,7 @@ const PassportManagement = () => {
   const handleFormSubmit = async (data, index) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/passport/save', {
+      const response = await fetch('http://localhost:8000/api/passport', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,6 +111,13 @@ const PassportManagement = () => {
               <p>{success}</p>
             </div>
           )}
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+            <span className="font-medium text-blue-600">Step 1: Passport Management</span>
+            <span>→</span>
+            <span>Step 2: Voucher Management</span>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Left side - Upload Section */}
@@ -195,6 +204,15 @@ const PassportManagement = () => {
                 </div>
               )}
             </div>
+          </div>
+          {/* Navigation footer */}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={() => navigate('/voucher-management')}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              Next: Voucher Management →
+            </button>
           </div>
         </div>
       </div>

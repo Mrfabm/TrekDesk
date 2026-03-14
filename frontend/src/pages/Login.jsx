@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 
 const Login = () => {
@@ -108,6 +108,13 @@ const Login = () => {
             </button>
           </div>
         </form>
+
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+          New agent?{' '}
+          <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );

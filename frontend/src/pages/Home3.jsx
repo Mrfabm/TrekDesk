@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import EnhancedTable from '../components/EnhancedTable';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import "../styles/datepicker-custom.css";
@@ -7,7 +8,6 @@ import { useTheme } from '../context/ThemeContext';
 import { Collapsible } from '../components/Collapsible';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { allBookingsData } from './ViewBookings1';
 
 const colorMap = {
   blue: {
@@ -131,6 +131,82 @@ const MetricCard = ({ title, total = 0, items = [], onItemClick, tooltip }) => (
   </div>
 );
 
+const STATUS_COLOR = {
+  provisional: 'bg-gray-100 text-gray-700',
+  requested: 'bg-blue-100 text-blue-800',
+  confirmed: 'bg-blue-100 text-blue-800',
+  awaiting_authorization: 'bg-orange-100 text-orange-800',
+  chase: 'bg-red-100 text-red-800',
+  secured_full: 'bg-green-100 text-green-800',
+  secured_deposit: 'bg-teal-100 text-teal-800',
+  amendment_requested: 'bg-orange-100 text-orange-800',
+  cancellation_requested: 'bg-red-100 text-red-800',
+  cancelled: 'bg-red-200 text-red-900',
+  rejected: 'bg-red-100 text-red-800',
+};
+const PAY_COLOR = {
+  pending: 'bg-gray-100 text-gray-700',
+  deposit_paid: 'bg-yellow-100 text-yellow-800',
+  partial: 'bg-orange-100 text-orange-800',
+  fully_paid: 'bg-green-100 text-green-800',
+  overdue: 'bg-red-100 text-red-800',
+  cancelled: 'bg-red-200 text-red-900',
+};
+
+const tabColumns = [
+  { header: 'Booking Name', accessor: 'booking_name' },
+  { header: 'Product', accessor: 'product' },
+  { header: 'Date', accessor: 'date', render: (row) => row.date ? new Date(row.date).toLocaleDateString() : '-' },
+  { header: 'People', accessor: 'number_of_people' },
+  {
+    header: 'Status', accessor: 'status',
+    render: (row) => row.status ? (
+      <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${STATUS_COLOR[row.status] || 'bg-gray-100 text-gray-700'}`}>
+        {row.status.replace(/_/g, ' ')}
+      </span>
+    ) : '-',
+  },
+  {
+    header: 'Payment', accessor: 'payment_status',
+    render: (row) => row.payment_status ? (
+      <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${PAY_COLOR[row.payment_status] || 'bg-gray-100 text-gray-700'}`}>
+        {row.payment_status.replace(/_/g, ' ')}
+      </span>
+    ) : '-',
+  },
+];
+
+const TabTableView = ({ tab, bookings }) => {
+  const filtered = useMemo(() => {
+    if (tab === 'bookings') return bookings;
+    if (tab === 'amendments') return bookings.filter(b =>
+      b.status === 'amendment_requested' || b.status === 'amended'
+    );
+    if (tab === 'cancellations') return bookings.filter(b =>
+      b.status === 'cancellation_requested' || b.status === 'cancelled'
+    );
+    return bookings;
+  }, [tab, bookings]);
+
+  const labels = { bookings: 'All Bookings', amendments: 'Amendment Requests', cancellations: 'Cancellation Requests' };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{labels[tab]}</h2>
+        <span className="text-xs text-gray-400">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-10 text-center">
+          <p className="text-sm text-gray-400">No {labels[tab].toLowerCase()} found.</p>
+        </div>
+      ) : (
+        <EnhancedTable data={filtered} columns={tabColumns} />
+      )}
+    </div>
+  );
+};
+
 const Home3 = () => {
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode } = useTheme();
@@ -144,6 +220,16 @@ const Home3 = () => {
   const isAdmin = localStorage.getItem('role') === 'admin';
   const [immediateAttentionOpen, setImmediateAttentionOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/bookings', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(r => r.json())
+      .then(data => setBookings(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, []);
 
   const [stats, setStats] = useState({
     deadlines: { critical: 0, warning: 0 },
@@ -157,8 +243,8 @@ const Home3 = () => {
       total: 0,
       fullPayment: { count: 0 },
       deposit: { count: 0 },
-      rollingDeposit: { count: 0 },
-      authorized: { count: 0 }
+      partial: { count: 0 },
+      overdue: { count: 0 }
     },
     pending: {
       noPayment: 0,
@@ -179,7 +265,7 @@ const Home3 = () => {
   const [todayConfirmed, setTodayConfirmed] = useState({
     fullyPaid: { count: 0, permits: {} },
     deposit: { count: 0, permits: {} },
-    authorized: { count: 0, permits: {} }
+    partial: { count: 0, permits: {} }
   });
 
   const [filters, setFilters] = useState({
@@ -202,15 +288,8 @@ const Home3 = () => {
     }
   });
 
-  // Filter data based on head of file
-  const filteredBookingsData = React.useMemo(() => {
-    if (isAdmin) {
-      return allBookingsData; // Admin sees all data
-    }
-    // Regular users only see their bookings
-    const userBookings = allBookingsData.filter(booking => booking.head_of_file === currentUser);
-    return userBookings;
-  }, [currentUser, isAdmin]);
+  // API already filters by user for non-admins; use bookings directly
+  const filteredBookingsData = bookings;
 
   // Calculate stats based on filtered data
   const calculateStats = (data) => {
@@ -227,8 +306,8 @@ const Home3 = () => {
           total: 0,
           fullPayment: { count: 0 },
           deposit: { count: 0 },
-          rollingDeposit: { count: 0 },
-          authorized: { count: 0 }
+          partial: { count: 0 },
+          overdue: { count: 0 }
         },
         pending: {
           noPayment: 0,
@@ -240,50 +319,86 @@ const Home3 = () => {
     }
     return {
       deadlines: {
-        critical: data.filter(b => b.validation_status === 'do_not_purchase').length,
-        warning: data.filter(b => b.validation_status === 'pending').length
+        // Overdue: explicitly set OR balance_due_date has passed
+        critical: data.filter(b => {
+          if (b.payment_status === 'overdue') return true;
+          if (b.balance_due_date && b.payment_status !== 'fully_paid')
+            return new Date(b.balance_due_date) < new Date();
+          return false;
+        }).length,
+        // Deposit-only + trek within 45 days, OR deposit_due_date passed without payment
+        warning: data.filter(b => {
+          if (b.payment_status === 'fully_paid') return false;
+          if (b.payment_status === 'deposit_paid') {
+            const days = Math.ceil((new Date(b.date) - new Date()) / 86400000);
+            return days > 0 && days <= 45;
+          }
+          if (b.deposit_due_date && b.payment_status === 'pending')
+            return new Date(b.deposit_due_date) < new Date();
+          return false;
+        }).length
       },
-      quickActions: data.filter(b => 
-        b.booking_status === 'requested' || 
-        b.validation_status === 'ok_to_purchase_full' || 
-        b.validation_status === 'ok_to_purchase_deposit' || 
+      quickActions: data.filter(b =>
+        b.status === 'requested' ||
+        b.validation_status === 'ok_to_purchase_full' ||
+        b.validation_status === 'ok_to_purchase_deposit' ||
         b.validation_status === 'do_not_purchase'
       ).length,
       todayBookings: data.filter(b => {
         const today = new Date().toISOString().split('T')[0];
-        return b.date_of_request?.split('T')[0] === today;
+        return b.date?.split('T')[0] === today;
       }).length,
-      criticalDeadlines: data.filter(b => b.validation_status === 'do_not_purchase').length,
+      criticalDeadlines: data.filter(b => {
+        // 1. Explicitly marked overdue OR balance_due_date has passed
+        if (b.payment_status === 'overdue') return true;
+        if (b.balance_due_date && b.payment_status !== 'fully_paid' && new Date(b.balance_due_date) < new Date()) return true;
+        // 2. Deposit paid, trek ≤45 days away with no top-up
+        if (b.payment_status === 'deposit_paid') {
+          const days = Math.ceil((new Date(b.date) - new Date()) / 86400000);
+          if (days > 0 && days <= 45) return true;
+        }
+        // 3. Deposit not paid and deposit_due_date has passed
+        if (b.payment_status === 'pending' && b.deposit_due_date && new Date(b.deposit_due_date) < new Date()) return true;
+        // 4. Authorized + promised payment date approaching — deferred (needs DB field)
+        return false;
+      }).length,
       amendments: {
-        under: data.filter(b => b.booking_status === 'amended' && b.payment_status !== 'fully_paid').length,
-        completed: data.filter(b => b.booking_status === 'amended' && b.payment_status === 'fully_paid').length,
-        declined: data.filter(b => b.booking_status === 'rejected').length
+        under: data.filter(b => b.status === 'amended' && b.payment_status !== 'fully_paid').length,
+        completed: data.filter(b => b.status === 'amended' && b.payment_status === 'fully_paid').length,
+        // Rejected + not yet cancelled = declined amendment (distinct from cancellations)
+        declined: data.filter(b => b.status === 'rejected' && b.payment_status !== 'cancelled').length
       },
       cancellations: {
-        under: data.filter(b => b.booking_status === 'rejected' && b.payment_status !== 'cancelled').length,
-        completed: data.filter(b => b.booking_status === 'rejected' && b.payment_status === 'cancelled').length
+        // Payment cancelled but booking not yet formally rejected = in-progress cancellation
+        under: data.filter(b => b.payment_status === 'cancelled' && b.status !== 'rejected').length,
+        // Both rejected and payment cancelled = fully completed cancellation
+        completed: data.filter(b => b.status === 'rejected' && b.payment_status === 'cancelled').length
       },
-      pendingPayments: data.filter(b => ['pending', 'partial', 'overdue'].includes(b.payment_status)).length,
+      // Provisional bookings have no payment by design — exclude them
+      pendingPayments: data.filter(b =>
+        b.status !== 'provisional' && b.payment_status !== 'fully_paid'
+      ).length,
       confirmedBookings: {
-        total: data.filter(b => b.booking_status === 'confirmed').length,
-        fullPayment: { 
-          count: data.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'fully_paid').length 
+        total: data.filter(b => b.status === 'confirmed').length,
+        fullPayment: {
+          count: data.filter(b => b.status === 'confirmed' && b.payment_status === 'fully_paid').length
         },
-        deposit: { 
-          count: data.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'deposit_paid').length 
+        deposit: {
+          count: data.filter(b => b.status === 'confirmed' && b.payment_status === 'deposit_paid').length
         },
-        rollingDeposit: { 
-          count: data.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'rolling_deposit').length 
+        partial: {
+          count: data.filter(b => b.status === 'confirmed' && b.payment_status === 'partial').length
         },
-        authorized: { 
-          count: data.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'authorized').length 
+        overdue: {
+          count: data.filter(b => b.status === 'confirmed' && b.payment_status === 'overdue').length
         }
       },
       pending: {
-        noPayment: data.filter(b => b.payment_status === 'pending').length,
-        missingDetails: data.filter(b => b.booking_status === 'requested' && b.validation_status === 'pending').length,
+        noPayment: data.filter(b => b.payment_status === 'pending' && b.status !== 'provisional').length,
+        missingDetails: data.filter(b => b.status === 'requested' && b.validation_status === 'pending').length,
         depositDue: data.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
-        authorizationDue: data.filter(b => b.booking_status === 'provisional' && b.validation_status === 'pending').length
+        // All provisional bookings need action (confirm or release)
+        authorizationDue: data.filter(b => b.status === 'provisional').length
       }
     };
   };
@@ -291,14 +406,14 @@ const Home3 = () => {
   // Calculate quick actions based on filtered data
   const calculateQuickActions = (data) => {
     return {
-      confirmationRequests: data.filter(b => b.booking_status === 'requested').length,
+      confirmationRequests: data.filter(b => b.status === 'requested').length,
       okToPurchaseFull: data.filter(b => b.validation_status === 'ok_to_purchase_full').length,
       okToPurchaseDeposit: data.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
       doNotPurchase: data.filter(b => b.validation_status === 'do_not_purchase').length,
-      total: data.filter(b => 
-        b.booking_status === 'requested' || 
-        b.validation_status === 'ok_to_purchase_full' || 
-        b.validation_status === 'ok_to_purchase_deposit' || 
+      total: data.filter(b =>
+        b.status === 'requested' ||
+        b.validation_status === 'ok_to_purchase_full' ||
+        b.validation_status === 'ok_to_purchase_deposit' ||
         b.validation_status === 'do_not_purchase'
       ).length
     };
@@ -307,20 +422,20 @@ const Home3 = () => {
   // Calculate today's confirmed bookings based on filtered data
   const calculateTodayConfirmed = (data) => {
     const today = new Date().toISOString().split('T')[0];
-    const todayBookings = data.filter(b => b.date_of_request?.split('T')[0] === today);
+    const todayBookings = data.filter(b => b.date?.split('T')[0] === today);
 
     return {
       fullyPaid: {
-        count: todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'fully_paid').length,
-        permits: calculatePermits(todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'fully_paid'))
+        count: todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'fully_paid').length,
+        permits: calculatePermits(todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'fully_paid'))
       },
       deposit: {
-        count: todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'deposit_paid').length,
-        permits: calculatePermits(todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'deposit_paid'))
+        count: todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'deposit_paid').length,
+        permits: calculatePermits(todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'deposit_paid'))
       },
-      authorized: {
-        count: todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'authorized').length,
-        permits: calculatePermits(todayBookings.filter(b => b.booking_status === 'confirmed' && b.payment_status === 'authorized'))
+      partial: {
+        count: todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'partial').length,
+        permits: calculatePermits(todayBookings.filter(b => b.status === 'confirmed' && b.payment_status === 'partial'))
       }
     };
   };
@@ -339,7 +454,7 @@ const Home3 = () => {
       setTodayConfirmed({
         fullyPaid: { count: 0, permits: {} },
         deposit: { count: 0, permits: {} },
-        authorized: { count: 0, permits: {} }
+        partial: { count: 0, permits: {} }
       });
       setIsLoading(false);
       return;
@@ -348,16 +463,25 @@ const Home3 = () => {
     setQuickActions(calculateQuickActions(filteredBookingsData));
     setTodayConfirmed(calculateTodayConfirmed(filteredBookingsData));
     setIsLoading(false);
-  }, [filteredBookingsData, isAdmin]);
+  }, [bookings, isAdmin]);
 
   // Helper function to calculate permits
   const calculatePermits = (bookings) => {
     return bookings.reduce((acc, booking) => {
       const product = booking.product || 'Unknown';
-      acc[product] = (acc[product] || 0) + (booking.number_of_permits || 1);
+      acc[product] = (acc[product] || 0) + (booking.number_of_people || 1);
       return acc;
     }, {});
   };
+
+  const LOW_AVAILABILITY_THRESHOLD = 40;
+  const lowAvailabilityBookings = useMemo(() =>
+    bookings.filter(b => {
+      const slots = parseInt(b.available_slots);
+      return !isNaN(slots) && slots > 0 && slots < LOW_AVAILABILITY_THRESHOLD && b.payment_status !== 'fully_paid';
+    }),
+    [bookings]
+  );
 
   const handleMetricClick = (type, status = 'all') => {
     // Special handling for passport management related actions
@@ -534,7 +658,7 @@ const Home3 = () => {
       {/* Top Navigation */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col py-5 space-y-4">
+          <div className="flex flex-col py-3 space-y-2">
             {/* Navigation Tabs */}
             <div className="flex items-center justify-between">
               <div className="inline-flex bg-gray-100 rounded-lg p-1">
@@ -660,13 +784,15 @@ const Home3 = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {!isAdmin && (!filteredBookingsData || filteredBookingsData.length === 0) ? (
+      <div className="max-w-7xl mx-auto px-6 py-4">
+        {activeTab !== 'overview' ? (
+          <TabTableView tab={activeTab} bookings={bookings} />
+        ) : !isAdmin && (!filteredBookingsData || filteredBookingsData.length === 0) ? (
           <NoBookingsMessage />
         ) : (
           <>
             {/* Quick Stats Row */}
-            <div className="grid grid-cols-7 gap-4 mb-8">
+            <div className="grid grid-cols-6 gap-3 mb-4">
               <ActionCard
                 icon={
                   <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -736,7 +862,7 @@ const Home3 = () => {
             </div>
 
             {/* Product Filter Row */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-4">
               <div className="inline-flex bg-gray-100 rounded-lg p-1">
                 {['All Products', 'Mountain Gorillas', 'Golden Monkeys'].map((product) => (
                   <button
@@ -765,7 +891,7 @@ const Home3 = () => {
             </div>
 
             {/* Immediate Attention Section */}
-            <div className="relative h-full mb-6">
+            <div className="relative h-full mb-2">
               <Collapsible
                 title="Immediate Attention"
                 expandUpward={true}
@@ -841,14 +967,14 @@ const Home3 = () => {
                       </div>
                       <div className="flex justify-between items-center p-2.5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all cursor-pointer">
                         <div>
-                          <span className="text-sm font-semibold text-gray-700">Authorized</span>
+                          <span className="text-sm font-semibold text-gray-700">Partial</span>
                           <div className="text-xs text-gray-400 mt-0.5">
-                            {Object.entries(todayConfirmed.authorized.permits)
+                            {Object.entries(todayConfirmed.partial.permits)
                               .map(([type, count]) => `${count} ${type}`)
                               .join(', ')}
                           </div>
                         </div>
-                        <span className="text-lg font-bold text-gray-800">{todayConfirmed.authorized.count}</span>
+                        <span className="text-lg font-bold text-gray-800">{todayConfirmed.partial.count}</span>
                       </div>
                     </div>
                   </div>
@@ -886,6 +1012,45 @@ const Home3 = () => {
               </Collapsible>
             </div>
 
+            {/* Low Availability — bookings with low slots and unpaid */}
+            {lowAvailabilityBookings.length > 0 && (
+              <div className="relative h-full mb-2">
+                <Collapsible
+                  title={`Low Availability (${lowAvailabilityBookings.length})`}
+                  expandUpward={true}
+                  className="bg-white dark:bg-gray-800 shadow-md border border-red-200 dark:border-red-700 hover:border-red-300 dark:hover:border-red-600 transition-all"
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          {['Booking', 'Product', 'Trek Date', 'Status', 'Payment', 'Slots Left'].map(h => (
+                            <th key={h} className="text-left py-1.5 px-2 text-gray-400 uppercase tracking-wider font-medium">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {lowAvailabilityBookings.map(b => (
+                          <tr
+                            key={b.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                            onClick={() => navigate('/view-bookings1?filter=low_availability')}
+                          >
+                            <td className="py-1.5 px-2 text-gray-900 dark:text-white font-medium">{b.booking_name}</td>
+                            <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{b.product}</td>
+                            <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{b.date}</td>
+                            <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 capitalize">{b.status || '-'}</td>
+                            <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 capitalize">{b.payment_status || 'none'}</td>
+                            <td className="py-1.5 px-2 font-bold text-red-600">{b.available_slots}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Collapsible>
+              </div>
+            )}
+
             {/* Key Metrics Section */}
             <div className="relative h-full">
               <Collapsible
@@ -910,15 +1075,15 @@ const Home3 = () => {
                         value: stats.confirmedBookings.deposit.count,
                         tooltip: 'Bookings with initial deposit payment'
                       },
-                      { 
-                        label: 'Rolling Deposit', 
-                        value: stats.confirmedBookings.rollingDeposit.count,
-                        tooltip: 'Bookings with rolling deposit arrangement'
+                      {
+                        label: 'Partial',
+                        value: stats.confirmedBookings.partial.count,
+                        tooltip: 'Bookings with partial payment received'
                       },
-                      { 
-                        label: 'Authorized', 
-                        value: stats.confirmedBookings.authorized.count,
-                        tooltip: 'Bookings authorized without payment'
+                      {
+                        label: 'Overdue',
+                        value: stats.confirmedBookings.overdue.count,
+                        tooltip: 'Confirmed bookings with overdue payment'
                       }
                     ]}
                     onItemClick={(type) => navigate(`/view-bookings1?filter=confirmed_${type.toLowerCase().replace(/\s+/g, '_')}`)}

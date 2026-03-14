@@ -123,6 +123,7 @@ const PassportUploader = ({ onUpload, onExtract }) => {
             onUpload(successfulUploads);
 
             // Extract data from uploaded files
+            const activeBookingId = localStorage.getItem('activeBookingId');
             const extractResponse = await fetch('http://localhost:8000/api/passport/extract', {
                 method: 'POST',
                 headers: {
@@ -130,7 +131,8 @@ const PassportUploader = ({ onUpload, onExtract }) => {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
-                    file_paths: successfulUploads.map(f => f.path)
+                    file_paths: successfulUploads.map(f => f.path),
+                    ...(activeBookingId && { booking_id: parseInt(activeBookingId) })
                 })
             });
 

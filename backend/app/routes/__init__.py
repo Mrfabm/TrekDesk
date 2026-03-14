@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import auth, users, bookings, available_slots, notifications, finance, golden_monkey_slots, passport, voucher
+from . import auth, users, bookings, available_slots, notifications, finance, golden_monkey_slots, passport, voucher, authorization, chase, amendments, cancellations, agents
 
 api_router = APIRouter()
 
@@ -13,3 +13,8 @@ api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
 api_router.include_router(golden_monkey_slots.router, prefix="/golden-monkey-slots", tags=["golden-monkey-slots"])
 api_router.include_router(passport.router, prefix="/passport", tags=["passport"])
 api_router.include_router(voucher.router, prefix="/voucher", tags=["voucher"])
+api_router.include_router(authorization.router, prefix="/authorization", tags=["authorization"])
+api_router.include_router(chase.router, prefix="/chase", tags=["chase"])
+api_router.include_router(amendments.router, prefix="/amendments", tags=["amendments"])
+api_router.include_router(cancellations.router, prefix="/cancellations", tags=["cancellations"])
+api_router.include_router(agents.router, prefix="/agents", tags=["agents"])

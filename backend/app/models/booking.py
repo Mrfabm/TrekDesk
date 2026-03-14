@@ -6,11 +6,22 @@ from datetime import datetime
 
 class BookingStatus(str, Enum):
     PROVISIONAL = "provisional"
-    REQUESTED = "requested"      # When user requests confirmation
-    VR = "validation_request"    # When admin sends to finance
-    CONFIRMED = "confirmed"      # Final confirmation by admin
-    REJECTED = "rejected"        # If rejected at any stage
-    AMENDED = "amended"         # When booking details are changed
+    REQUESTED = "requested"              # Legacy — kept for backward compat
+    VR = "validation_request"           # Legacy — kept for backward compat
+    CONFIRMED = "confirmed"             # Agent + user confirmed; awaiting payment validation
+    REJECTED = "rejected"
+    AMENDED = "amended"                 # Legacy — kept for backward compat
+    # New statuses
+    AWAITING_AUTHORIZATION = "awaiting_authorization"   # Trusted agent, no payment — user must submit auth request
+    AUTHORIZED = "authorized"               # Auth request approved — ready for permit purchase
+    CHASE = "chase"                     # Untrusted agent, no payment — 5 weekly chase alerts
+    RELEASED = "released"               # Auto-released after 5 failed chases
+    SECURED_FULL = "secured_full"       # Permits purchased, full payment
+    SECURED_DEPOSIT = "secured_deposit" # Permits purchased, deposit only (top-up required 45 days out)
+    SECURED_AUTHORIZATION = "secured_authorization"  # Permits purchased under authorization
+    AMENDMENT_REQUESTED = "amendment_requested"
+    CANCELLATION_REQUESTED = "cancellation_requested"
+    CANCELLED = "cancelled"
 
 class PaymentStatus(str, Enum):
     PENDING = "pending"
@@ -54,12 +65,17 @@ class Booking(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     site_id = Column(Integer, ForeignKey("sites.id"))
     product_id = Column(Integer, ForeignKey("products.id"))
-    
+    agent_client_id = Column(Integer, ForeignKey("agent_clients.id"), nullable=True)
+
     # Relationships
     user = relationship("User", back_populates="bookings")
     site = relationship("Site")
     product_rel = relationship("Product")  # Renamed to avoid conflict with product column
+    agent_client_rel = relationship("AgentClient", back_populates="bookings")
     payment = relationship("Payment", back_populates="booking", uselist=False)
+    chase_record = relationship("ChaseRecord", back_populates="booking", uselist=False)
+    amendment_requests = relationship("AmendmentRequest", back_populates="booking")
+    cancellation_requests = relationship("CancellationRequest", back_populates="booking")
 
     def calculate_total_amount(self):
         """Calculate total amount based on product and number of people"""

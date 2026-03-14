@@ -1,11 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
-import Home from './pages/Home';
-import Home1 from './pages/Home1';
-import Home2 from './pages/Home2';
+import Register from './pages/Register';
 import Home3 from './pages/Home3';
-import CreateBooking from './pages/Dashboard';
+import CreateBooking from './pages/CreateBooking';
 import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import Bookings from './pages/Bookings';
@@ -16,13 +14,14 @@ import AvailableSlots from './pages/AvailableSlots';
 import SuperuserHome from './pages/SuperuserHome';
 import GoldenMonkeySlots from './pages/GoldenMonkeySlots';
 import PassportManagement from './pages/PassportManagement';
-import PassportManagement1 from './pages/PassportManagement1';
-import PassportManagement2 from './pages/PassportManagement2';
 import AdvancedTracking from './pages/AdvancedTracking';
+import VoucherManagement from './pages/VoucherManagement';
+import BookingClientDetails from './pages/BookingClientDetails';
+import AuthorizerDashboard from './pages/AuthorizerDashboard';
+import AgentManagement from './pages/AgentManagement';
 import ViewBookings1 from './pages/ViewBookings1';
 import ViewBookings2 from './pages/ViewBookings2';
 import ViewBookings3 from './pages/ViewBookings3';
-import VoucherManagement from './pages/VoucherManagement';
 
 function App() {
   const PrivateRoute = ({ children }) => {
@@ -36,14 +35,17 @@ function App() {
     return token && role === 'finance_admin' ? children : <Navigate to="/login" />;
   };
 
+  const AuthorizerRoute = ({ children }) => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    return token && ['authorizer', 'superuser'].includes(role) ? children : <Navigate to="/login" />;
+  };
+
   const HomeRedirect = () => {
     const role = localStorage.getItem('role');
-    
-    if (role === 'superuser') {
-      return <SuperuserHome />;
-    } else if (role === 'finance_admin') {
-      return <Navigate to="/finance" />;
-    }
+    if (role === 'superuser') return <SuperuserHome />;
+    if (role === 'finance_admin') return <Navigate to="/finance" />;
+    if (role === 'authorizer') return <Navigate to="/authorizer" />;
     return <Home3 />;
   };
 
@@ -52,6 +54,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           
           {/* Finance Admin Routes */}
           <Route path="/finance" element={
@@ -115,6 +118,13 @@ function App() {
               </Layout>
             </PrivateRoute>
           } />
+          <Route path="/bookings/:bookingId/client" element={
+            <PrivateRoute>
+              <Layout>
+                <BookingClientDetails />
+              </Layout>
+            </PrivateRoute>
+          } />
           <Route path="/available-slots" element={
             <PrivateRoute>
               <Layout>
@@ -136,70 +146,25 @@ function App() {
               </Layout>
             </PrivateRoute>
           } />
-          <Route path="/passport-management1" element={
-            <PrivateRoute>
-              <Layout>
-                <PassportManagement1 />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/passport-management2" element={
-            <PrivateRoute>
-              <Layout>
-                {localStorage.getItem('role') === 'user' ? 
-                  <PassportManagement2 /> : 
-                  <Navigate to="/home" />
-                }
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/home1" element={
-            <PrivateRoute>
-              <Layout>
-                <Home1 />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/home2" element={
-            <PrivateRoute>
-              <Layout>
-                <Home2 />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/home3" element={
-            <PrivateRoute>
-              <Layout>
-                {localStorage.getItem('role') === 'admin' ? 
-                  <Home /> : 
-                  <Navigate to="/home" />
-                }
-              </Layout>
-            </PrivateRoute>
-          } />
           <Route path="/tracking" element={<AdvancedTracking />} />
-          <Route path="/view-bookings1" element={
-            <PrivateRoute>
-              <Layout>
-                <ViewBookings1 />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/view-bookings2" element={
-            <PrivateRoute>
-              <Layout>
-                <ViewBookings2 />
-              </Layout>
-            </PrivateRoute>
-          } />
-          <Route path="/view-bookings3" element={
-            <PrivateRoute>
-              <Layout>
-                <ViewBookings3 />
-              </Layout>
-            </PrivateRoute>
-          } />
           <Route path="/voucher-management" element={<PrivateRoute><Layout><VoucherManagement /></Layout></PrivateRoute>} />
+          <Route path="/view-bookings1" element={<PrivateRoute><Layout><ViewBookings1 /></Layout></PrivateRoute>} />
+          <Route path="/view-bookings2" element={<PrivateRoute><Layout><ViewBookings2 /></Layout></PrivateRoute>} />
+          <Route path="/view-bookings3" element={<PrivateRoute><Layout><ViewBookings3 /></Layout></PrivateRoute>} />
+          <Route path="/agents" element={
+            <PrivateRoute>
+              <Layout>
+                <AgentManagement />
+              </Layout>
+            </PrivateRoute>
+          } />
+          <Route path="/authorizer" element={
+            <AuthorizerRoute>
+              <Layout>
+                <AuthorizerDashboard />
+              </Layout>
+            </AuthorizerRoute>
+          } />
         </Routes>
       </Router>
     </ThemeProvider>

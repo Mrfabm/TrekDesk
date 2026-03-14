@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/24/solid';
 import EnhancedTable from '../components/EnhancedTable';
-import { allBookingsData } from './ViewBookings1';
 
 // Helper functions for status colors
 const getPaymentStatusColor = (status) => {
@@ -84,11 +83,11 @@ const BookingDetailModal = ({ booking, onClose }) => {
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-base opacity-90">📅</span>
-                <span className="text-[13px]">{new Date(booking.trekking_date).toLocaleDateString()}</span>
+                <span className="text-[13px]">{booking.date ? new Date(booking.date).toLocaleDateString() : '-'}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-base opacity-90">👥</span>
-                <span className="text-[13px]">{booking.number_of_permits} permits</span>
+                <span className="text-[13px]">{booking.number_of_people ?? booking.people ?? '-'} permits</span>
               </div>
             </div>
           </div>
@@ -108,30 +107,30 @@ const BookingDetailModal = ({ booking, onClose }) => {
             <div>
               <span className="block text-[12px] font-medium text-gray-500 mb-1.5">Payment Status</span>
               <span className={`inline-flex px-2.5 py-1 text-[13px] font-medium rounded-full shadow-sm ${getPaymentStatusColor(booking.payment_status)}`}>
-                {booking.payment_status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                {booking.payment_status ? booking.payment_status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '—'}
               </span>
             </div>
             <div>
               <span className="block text-[12px] font-medium text-gray-500 mb-1.5">Booking Status</span>
-              <span className={`inline-flex px-2.5 py-1 text-[13px] font-medium rounded-full shadow-sm ${getBookingStatusColor(booking.booking_status)}`}>
-                {booking.booking_status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              <span className={`inline-flex px-2.5 py-1 text-[13px] font-medium rounded-full shadow-sm ${getBookingStatusColor(booking.status)}`}>
+                {booking.status ? booking.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '—'}
               </span>
             </div>
             <div>
               <span className="block text-[12px] font-medium text-gray-500 mb-1.5">Validation Status</span>
               <span className={`inline-flex px-2.5 py-1 text-[13px] font-medium rounded-full shadow-sm ${getActionStatusColor(booking.validation_status)}`}>
-                {booking.validation_status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                {booking.validation_status ? booking.validation_status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '—'}
               </span>
             </div>
           </div>
           <div className="flex items-center space-x-6">
             <div className="text-right">
               <span className="block text-[12px] font-medium text-gray-500 mb-1.5">Total Amount</span>
-              <span className="text-[15px] font-semibold text-gray-900">${booking.total_amount.toLocaleString()}</span>
+              <span className="text-[15px] font-semibold text-gray-900">{booking.total_amount != null ? `$${Number(booking.total_amount).toLocaleString()}` : '—'}</span>
             </div>
             <div className="text-right">
               <span className="block text-[12px] font-medium text-gray-500 mb-1.5">Paid Amount</span>
-              <span className="text-[15px] font-semibold text-emerald-600">${booking.paid_amount.toLocaleString()}</span>
+              <span className="text-[15px] font-semibold text-emerald-600">{booking.amount_received != null ? `$${Number(booking.amount_received).toLocaleString()}` : '—'}</span>
             </div>
           </div>
         </div>
@@ -157,7 +156,7 @@ const BookingDetailModal = ({ booking, onClose }) => {
                         </div>
                         <div>
                           <label className="block text-[12px] font-medium text-gray-500 mb-1">Originating Agent</label>
-                          <div className="text-[13px] font-medium text-gray-700">{booking.originating_agent || '-'}</div>
+                          <div className="text-[13px] font-medium text-gray-700">{booking.agent_client || '-'}</div>
                         </div>
                       </Disclosure.Panel>
                     </>
@@ -176,16 +175,16 @@ const BookingDetailModal = ({ booking, onClose }) => {
                       <Disclosure.Panel className="mt-3 space-y-3">
                         <div>
                           <label className="block text-[12px] font-medium text-gray-500 mb-1">Voucher</label>
-                          <div className="text-[13px] font-medium text-gray-700">{booking.voucher || '-'}</div>
+                          <div className="text-[13px] font-medium text-gray-700">{booking.voucher_number || '-'}</div>
                         </div>
                         <div>
                           <label className="block text-[12px] font-medium text-gray-500 mb-1">People</label>
-                          <div className="text-[13px] font-medium text-gray-700">{booking.people || '-'}</div>
+                          <div className="text-[13px] font-medium text-gray-700">{booking.number_of_people ?? booking.people ?? '-'}</div>
                         </div>
                         <div>
                           <label className="block text-[12px] font-medium text-gray-500 mb-1">Request Date</label>
                           <div className="text-[13px] font-medium text-gray-700">
-                            {new Date(booking.date_of_request).toLocaleDateString()}
+                            {booking.date_of_request ? new Date(booking.date_of_request).toLocaleDateString() : '-'}
                           </div>
                         </div>
                       </Disclosure.Panel>
@@ -230,15 +229,16 @@ const ViewBookings3 = () => {
   const filterParam = searchParams.get('filter');
   const currentUser = localStorage.getItem('username'); // Get logged in user
 
-  // Filter data based on head of file
-  const allData = React.useMemo(() => {
-    const data = allBookingsData;
-    if (localStorage.getItem('role') === 'admin') {
-      return data; // Admin sees all data
-    }
-    // Regular users only see their bookings
-    return data.filter(booking => booking.head_of_file === currentUser);
-  }, [currentUser]);
+  const [allData, setAllData] = useState([]);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/bookings', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(r => r.json())
+      .then(data => setAllData(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, []);
 
   // Handle row click to show details
   const handleRowClick = (booking) => {
@@ -290,8 +290,8 @@ const ViewBookings3 = () => {
     },
     {
       header: "Trek Date",
-      accessor: "trekking_date",
-      cell: (value) => new Date(value).toLocaleDateString(),
+      accessor: "date",
+      render: (row) => row.date ? new Date(row.date).toLocaleDateString() : '-',
       cellClassName: "px-4 py-2 text-sm text-gray-600",
       headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
       width: "120px"
@@ -299,11 +299,11 @@ const ViewBookings3 = () => {
     {
       header: "Payment Status",
       accessor: "payment_status",
-      cell: (value) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(value)}`}>
-          {value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+      render: (row) => row.payment_status ? (
+        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(row.payment_status)}`}>
+          {row.payment_status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
         </span>
-      ),
+      ) : '-',
       cellClassName: "px-4 py-2 text-sm",
       headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
       width: "130px"
@@ -311,15 +311,15 @@ const ViewBookings3 = () => {
     {
       header: "Actions",
       accessor: "validation_status",
-      cell: (value, row) => (
+      render: (row) => (
         <button
-          onClick={(e) => handleActionClick(e, value, row.id)}
-          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionStatusColor(value)}`}
+          onClick={(e) => handleActionClick(e, row.validation_status, row.id)}
+          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionStatusColor(row.validation_status)}`}
         >
-          {value === 'ok_to_purchase_full' && "Confirm Permit (Full)"}
-          {value === 'ok_to_purchase_deposit' && "Confirm Permit (Deposit)"}
-          {value === 'do_not_purchase' && "Request Authorization"}
-          {value === 'pending' && "Payment Approval"}
+          {row.validation_status === 'ok_to_purchase_full' && "Confirm Permit (Full)"}
+          {row.validation_status === 'ok_to_purchase_deposit' && "Confirm Permit (Deposit)"}
+          {row.validation_status === 'do_not_purchase' && "Request Authorization"}
+          {row.validation_status === 'pending' && "Payment Approval"}
         </button>
       ),
       cellClassName: "px-4 py-2 text-sm",
@@ -329,7 +329,7 @@ const ViewBookings3 = () => {
     {
       header: "Done On",
       accessor: "date_of_request",
-      cell: (value) => new Date(value).toLocaleDateString(),
+      render: (row) => row.date_of_request ? new Date(row.date_of_request).toLocaleDateString() : '-',
       cellClassName: "px-4 py-2 text-sm text-gray-600",
       headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
       width: "120px"

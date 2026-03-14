@@ -25,6 +25,13 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str
+    is_trusted_agent: bool = False
+    has_rolling_deposit: bool = False
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
 
 @router.get("")
 async def get_users(
@@ -42,7 +49,9 @@ async def get_users(
             "id": user.id,
             "email": user.email,
             "username": user.username,
-            "role": user.role.value
+            "role": user.role.value,
+            "is_trusted_agent": user.is_trusted_agent,
+            "has_rolling_deposit": user.has_rolling_deposit,
         } for user in users
     ]
 
@@ -78,7 +87,9 @@ async def create_user(
         email=user_data.email,
         username=user_data.username,
         hashed_password=hashed_password,
-        role=UserRole[user_data.role.upper()]
+        role=UserRole[user_data.role.upper()],
+        is_trusted_agent=user_data.is_trusted_agent,
+        has_rolling_deposit=user_data.has_rolling_deposit,
     )
 
     try:
@@ -95,7 +106,9 @@ async def create_user(
             "id": db_user.id,
             "email": db_user.email,
             "username": db_user.username,
-            "role": db_user.role.value
+            "role": db_user.role.value,
+            "is_trusted_agent": db_user.is_trusted_agent,
+            "has_rolling_deposit": db_user.has_rolling_deposit,
         }
     except Exception as e:
         db.rollback()
@@ -183,6 +196,8 @@ async def update_user(
         user.hashed_password = pwd_context.hash(user_data.password)
 
     user.role = UserRole[user_data.role.upper()]
+    user.is_trusted_agent = user_data.is_trusted_agent
+    user.has_rolling_deposit = user_data.has_rolling_deposit
 
     try:
         db.commit()
@@ -197,7 +212,9 @@ async def update_user(
             "id": user.id,
             "email": user.email,
             "username": user.username,
-            "role": user.role.value
+            "role": user.role.value,
+            "is_trusted_agent": user.is_trusted_agent,
+            "has_rolling_deposit": user.has_rolling_deposit,
         }
     except Exception as e:
         db.rollback()
@@ -218,7 +235,11 @@ async def get_user_metrics(
         )
     
     total_users = db.query(User).count()
-    return {"total_users": total_users}
+    role_breakdown = {}
+    for role in UserRole:
+        count = db.query(User).filter(User.role == role).count()
+        role_breakdown[role.value] = count
+    return {"total_users": total_users, "role_breakdown": role_breakdown}
 
 @router.post("/{user_id}/reset-password")
 async def reset_password(
@@ -252,6 +273,19 @@ async def reset_password(
             detail=f"Error resetting password: {str(e)}"
         )
 
+@router.post("/change-password")
+async def change_password(
+    body: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not pwd_context.verify(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    current_user.hashed_password = pwd_context.hash(body.new_password)
+    db.commit()
+    return {"message": "Password changed successfully"}
+
+
 @router.get("/activity-logs")
 async def get_activity_logs(
     current_user: User = Depends(get_current_user),
@@ -263,5 +297,18 @@ async def get_activity_logs(
             detail="Not authorized to view activity logs"
         )
 
-    logs = db.query(ActivityLog).all()
-    return [{"user_id": log.user_id, "action": log.action, "timestamp": log.timestamp} for log in logs]
+    logs = (
+        db.query(ActivityLog)
+        .order_by(ActivityLog.timestamp.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "user_id": log.user_id,
+            "username": log.user.username if log.user else f"User #{log.user_id}",
+            "action": log.action,
+            "created_at": log.timestamp.isoformat() if log.timestamp else None,
+        }
+        for log in logs
+    ]

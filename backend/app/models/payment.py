@@ -7,14 +7,16 @@ import enum
 class PaymentStatus(str, enum.Enum):
     PENDING = "pending"
     DEPOSIT_PAID = "deposit_paid"
+    PARTIAL = "partial"
     FULLY_PAID = "fully_paid"
+    CANCELLED = "cancelled"
     OVERDUE = "overdue"
 
 class ValidationStatus(str, enum.Enum):
     PENDING = "pending"
-    OK_FULL = "ok_to_purchase_full"
-    OK_DEPOSIT = "ok_to_purchase_deposit"
-    NOT_OK = "do_not_purchase"
+    OK_TO_PURCHASE_FULL = "ok_to_purchase_full"
+    OK_TO_PURCHASE_DEPOSIT = "ok_to_purchase_deposit"
+    DO_NOT_PURCHASE = "do_not_purchase"
 
 class Payment(Base):
     __tablename__ = "payments"

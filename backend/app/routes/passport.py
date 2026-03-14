@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Absolute path for uploads so os.path.exists() works regardless of working directory
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(_BASE_DIR, "uploads", "passports")
+
 class PassportDataCreate(BaseModel):
     full_name: str
     date_of_birth: date
@@ -26,6 +30,7 @@ class PassportDataCreate(BaseModel):
 
 class ExtractRequest(BaseModel):
     file_paths: List[str]
+    booking_id: Optional[int] = None
 
 class ExtractionResult(BaseModel):
     status: str
@@ -94,8 +99,7 @@ async def upload_passport_documents(
     db: Session = Depends(get_db)
 ):
     uploaded_files = []
-    upload_dir = "uploads/passports"
-    os.makedirs(upload_dir, exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     
     # Validate file types
     allowed_types = {
@@ -121,7 +125,7 @@ async def upload_passport_documents(
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_filename = "".join(c for c in file.filename if c.isalnum() or c in ('-', '_', '.'))
-            file_path = f"{upload_dir}/{current_user.id}_{timestamp}_{safe_filename}"
+            file_path = os.path.join(UPLOAD_DIR, f"{current_user.id}_{timestamp}_{safe_filename}")
             
             # Save file
             try:
@@ -226,10 +230,12 @@ async def extract_passport_data(
                 ).first()
                 
                 if existing_passport:
-                    # Update existing passport
+                    # Update existing passport (skip date fields — keep existing DB values)
                     for key, value in passport_dict.items():
-                        if hasattr(existing_passport, key):
+                        if key not in ('date_of_birth', 'passport_expiry') and hasattr(existing_passport, key) and value:
                             setattr(existing_passport, key, value)
+                    if request.booking_id:
+                        existing_passport.booking_id = request.booking_id
                     db.commit()
                     db.refresh(existing_passport)
                     results[file_path] = ExtractionResult(
@@ -237,20 +243,47 @@ async def extract_passport_data(
                         data=existing_passport.model_dump()
                     )
                 else:
+                    # Parse dates flexibly
+                    def parse_date(s):
+                        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d %b %Y', '%d %B %Y'):
+                            try:
+                                return datetime.strptime(s, fmt).date()
+                            except (ValueError, TypeError):
+                                continue
+                        return None
+
+                    dob = parse_date(passport_dict.get('date_of_birth', ''))
+                    expiry = parse_date(passport_dict.get('passport_expiry', ''))
+
+                    if not dob or not expiry:
+                        # Dates couldn't be parsed — return as incomplete so user can correct
+                        missing = []
+                        if not dob:
+                            missing.append('date_of_birth')
+                        if not expiry:
+                            missing.append('passport_expiry')
+                        results[file_path] = ExtractionResult(
+                            status="incomplete",
+                            missing_fields=missing,
+                            data=passport_dict
+                        )
+                        continue
+
                     # Create new passport data
                     db_passport = PassportData(
                         full_name=passport_dict['full_name'],
-                        date_of_birth=datetime.strptime(passport_dict['date_of_birth'], "%Y-%m-%d").date(),
+                        date_of_birth=dob,
                         passport_number=passport_dict['passport_number'],
-                        passport_expiry=datetime.strptime(passport_dict['passport_expiry'], "%Y-%m-%d").date(),
+                        passport_expiry=expiry,
                         nationality=passport_dict.get('nationality'),
                         place_of_birth=passport_dict.get('place_of_birth'),
                         gender=passport_dict.get('gender'),
                         confidence_score=passport_dict.get('confidence_score'),
                         source_file=file_path,
-                        user_id=current_user.id
+                        user_id=current_user.id,
+                        booking_id=request.booking_id
                     )
-                    
+
                     db.add(db_passport)
                     db.commit()
                     db.refresh(db_passport)

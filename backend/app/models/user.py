@@ -15,6 +15,7 @@ class UserRole(enum.Enum):
     ADMIN = "admin"
     SUPERUSER = "superuser"
     FINANCE_ADMIN = "finance_admin"
+    AUTHORIZER = "authorizer"
 
 class User(Base):
     __tablename__ = "users"
@@ -25,6 +26,8 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(Enum(UserRole), default=UserRole.USER)
     is_active = Column(Boolean, default=True)
+    is_trusted_agent = Column(Boolean, default=False)
+    has_rolling_deposit = Column(Boolean, default=False)
 
     # Relationships
     bookings = relationship("Booking", back_populates="user", cascade="all, delete-orphan")

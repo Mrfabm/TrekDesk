@@ -149,3 +149,15 @@ async def notify_user(
     send_email: bool = False
 ):
     await create_notification(db, user_id, notification, background_tasks, send_email)
+
+
+def create_simple_notification(db: Session, user_id: int, title: str, message: str):
+    """Synchronous helper for creating notifications without BackgroundTasks."""
+    notif = Notification(
+        user_id=user_id,
+        title=title,
+        message=message,
+        type=NotificationType.INFO
+    )
+    db.add(notif)
+    # caller is responsible for db.commit()

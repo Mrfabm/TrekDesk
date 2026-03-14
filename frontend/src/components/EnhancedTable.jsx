@@ -1,38 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ExportOptions from './ExportOptions';
 import DatePicker from 'react-datepicker';
 import { Disclosure } from '@headlessui/react';
-import { 
-  ChevronUpIcon, 
+import {
+  ChevronUpIcon,
   FunnelIcon,
   CalendarIcon,
   AdjustmentsHorizontalIcon,
-  ChevronDownIcon, 
-  HashtagIcon, 
-  DocumentTextIcon, 
-  MagnifyingGlassIcon, 
+  ChevronDownIcon,
+  HashtagIcon,
+  DocumentTextIcon,
+  MagnifyingGlassIcon,
   XMarkIcon,
   UserGroupIcon,
-  ClockIcon
+  ClockIcon,
+  ViewColumnsIcon
 } from '@heroicons/react/24/outline';
 import "react-datepicker/dist/react-datepicker.css";
 
-const EnhancedTable = ({ 
-  data, 
-  columns, 
+const EnhancedTable = ({
+  data,
+  columns,
   onRowClick,
-  rowClassName
+  rowClassName,
+  defaultHiddenColumns = [],
 }) => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [filteredData, setFilteredData] = useState(data);
   const [filters, setFilters] = useState({});
   const [selectAll, setSelectAll] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState(new Set(defaultHiddenColumns));
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const columnPickerRef = useRef(null);
 
   // Get unique values for dropdowns
   const uniqueProducts = [...new Set(data.map(item => item.product))];
   const uniqueUsers = [...new Set(data.map(item => item.head_of_file))];
-  const uniqueAgents = [...new Set(data.map(item => item.originating_agent))];
+  const uniqueAgents = [...new Set(data.map(item => item.agent_client).filter(Boolean))];
   const paymentStatuses = ['pending', 'fully_paid', 'deposit_paid', 'cancelled', 'partial', 'overdue', 'authorized', 'rolling_deposit'];
   const validationStatuses = ['pending', 'ok_to_purchase_full', 'ok_to_purchase_deposit', 'do_not_purchase'];
 
@@ -75,6 +80,27 @@ const EnhancedTable = ({
     });
     setFilteredData(result);
   }, [filters, data]);
+
+  // Close column picker when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (columnPickerRef.current && !columnPickerRef.current.contains(e.target)) {
+        setShowColumnPicker(false);
+      }
+    };
+    if (showColumnPicker) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showColumnPicker]);
+
+  const toggleColumn = (accessor) => {
+    setHiddenColumns(prev => {
+      const next = new Set(prev);
+      next.has(accessor) ? next.delete(accessor) : next.add(accessor);
+      return next;
+    });
+  };
+
+  const visibleColumns = columns.filter(c => !hiddenColumns.has(c.accessor));
 
   // Handle select all checkbox
   const handleSelectAll = () => {
@@ -146,7 +172,7 @@ const EnhancedTable = ({
       
       case 'product':
       case 'head_of_file':
-      case 'originating_agent':
+      case 'agent_client':
       case 'payment_status':
       case 'validation_status':
         return (
@@ -159,7 +185,7 @@ const EnhancedTable = ({
               <option value="">All</option>
               {(column.accessor === 'product' ? uniqueProducts
                 : column.accessor === 'head_of_file' ? uniqueUsers
-                : column.accessor === 'originating_agent' ? uniqueAgents
+                : column.accessor === 'agent_client' ? uniqueAgents
                 : column.accessor === 'payment_status' ? paymentStatuses
                 : validationStatuses).map(option => (
                   <option key={option} value={option}>
@@ -223,7 +249,7 @@ const EnhancedTable = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`inline-flex items-center px-2.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   showFilters
                     ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                     : 'text-gray-700 hover:bg-gray-50'
@@ -237,10 +263,60 @@ const EnhancedTable = ({
                   </span>
                 )}
               </button>
+
+              {/* Column visibility picker */}
+              <div className="relative" ref={columnPickerRef}>
+                <button
+                  onClick={() => setShowColumnPicker(v => !v)}
+                  className={`inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    showColumnPicker
+                      ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <ViewColumnsIcon className="w-4 h-4 mr-1.5" />
+                  Columns
+                  {hiddenColumns.size > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded-full">
+                      {hiddenColumns.size} hidden
+                    </span>
+                  )}
+                </button>
+                {showColumnPicker && (
+                  <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px]">
+                    <div className="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-600">Toggle columns</span>
+                      {hiddenColumns.size > 0 && (
+                        <button
+                          onClick={() => setHiddenColumns(new Set())}
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          Show all
+                        </button>
+                      )}
+                    </div>
+                    {columns.map(col => (
+                      <label
+                        key={col.accessor}
+                        className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!hiddenColumns.has(col.accessor)}
+                          onChange={() => toggleColumn(col.accessor)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3"
+                        />
+                        <span className="text-xs text-gray-700">{col.header}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {activeFiltersCount > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   Clear all
                 </button>
@@ -257,10 +333,10 @@ const EnhancedTable = ({
                 filename="table-export"
                 tableHeaders={columns}
               />
-              <button className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
+              <button className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
                 Batch Actions
               </button>
-              <button className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
+              <button className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
                 Save View
               </button>
             </div>
@@ -313,9 +389,9 @@ const EnhancedTable = ({
                     </div>
                     <div>
                       <label className="block text-[13px] text-gray-600 mb-1 font-medium">
-                        Originating Agent
+                        Client
                       </label>
-                      {renderInput({ accessor: 'originating_agent', header: 'Originating Agent' })}
+                      {renderInput({ accessor: 'agent_client', header: 'Client' })}
                     </div>
                     <div>
                       <label className="block text-[13px] text-gray-600 mb-1 font-medium">
@@ -372,8 +448,8 @@ const EnhancedTable = ({
                   className="rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20"
                 />
               </th>
-              {columns.map(column => (
-                <th 
+              {visibleColumns.map(column => (
+                <th
                   key={column.accessor}
                   className={column.headerClassName || "px-3 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider align-middle"}
                 >
@@ -412,10 +488,10 @@ const EnhancedTable = ({
                       className="rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </td>
-                  {columns.map(column => (
-                    <td 
+                  {visibleColumns.map(column => (
+                    <td
                       key={column.accessor}
-                      className={column.cellClassName || "px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 align-middle whitespace-nowrap"}
+                      className={column.cellClassName || "px-3 py-2.5 text-xs text-gray-700 dark:text-gray-200 align-middle whitespace-nowrap"}
                     >
                       {column.render ? column.render(row) : row[column.accessor]}
                     </td>
@@ -426,8 +502,8 @@ const EnhancedTable = ({
             {filteredData.length === 0 && (
               <tr>
                 <td 
-                  colSpan={columns.length + 1}
-                  className="px-3 py-8 text-sm text-center text-gray-500 dark:text-gray-400"
+                  colSpan={visibleColumns.length + 1}
+                  className="px-3 py-6 text-xs text-center text-gray-400 dark:text-gray-500"
                 >
                   No results found
                 </td>
@@ -438,8 +514,8 @@ const EnhancedTable = ({
       </div>
 
       {/* Table Footer */}
-      <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3 bg-white dark:bg-gray-900">
-        <div className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-200">
+      <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-2 bg-white dark:bg-gray-900">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <div>
             {selectedRows.length > 0 ? (
               <span>

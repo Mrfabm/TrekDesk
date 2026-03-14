@@ -23,7 +23,8 @@ class PassportData(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+    booking_id = Column(Integer, ForeignKey("bookings.id"), nullable=True)
+
     user = relationship("User", back_populates="passport_data")
     
     def model_dump(self):

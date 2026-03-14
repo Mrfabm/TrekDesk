@@ -1,7 +1,6 @@
 import json
 import os
-import google.generativeai as genai
-from PIL import Image
+import base64
 from pdf2image import convert_from_path
 import tempfile
 import shutil
@@ -9,10 +8,22 @@ import logging
 from pydantic import BaseModel, validator
 from typing import Optional
 from datetime import datetime
-import asyncio
+from dotenv import load_dotenv
+from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load .env using absolute path so it works regardless of working directory
+_ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+load_dotenv(_ENV_PATH)
+
+_OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+if not _OPENAI_KEY:
+    raise RuntimeError(f"OPENAI_API_KEY not found. Looked for .env at: {_ENV_PATH}")
+
+client = OpenAI(api_key=_OPENAI_KEY)
+
 
 class VoucherData(BaseModel):
     booking_name: str
@@ -53,13 +64,12 @@ class VoucherData(BaseModel):
             raise ValueError("Booking reference must be at least 3 characters long")
         return v.strip().upper()
 
+
 class VoucherExtractor:
     def __init__(self):
         self.supported_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.tiff'}
         self._temp_dir = None
         self.poppler_path = os.getenv('POPPLER_PATH')
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
     def __del__(self):
         if self._temp_dir:
@@ -68,19 +78,15 @@ class VoucherExtractor:
             except Exception:
                 pass
 
-    def load_image(self, image_path: str):
-        """Load image for Gemini"""
-        try:
-            return Image.open(image_path)
-        except Exception as e:
-            logger.error(f"Error loading image: {e}")
-            raise
+    def _encode_image(self, image_path: str) -> str:
+        """Encode image as base64 string for OpenAI API."""
+        with open(image_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
 
     def convert_pdf_to_image(self, pdf_path: str) -> str:
-        """Convert first page of PDF to image and return path"""
+        """Convert first page of PDF to image and return path."""
         if not self._temp_dir:
             self._temp_dir = tempfile.mkdtemp()
-            
         try:
             images = convert_from_path(
                 pdf_path,
@@ -89,10 +95,8 @@ class VoucherExtractor:
                 last_page=1,
                 poppler_path=self.poppler_path
             )
-            
             if not images:
                 raise ValueError("No images extracted from PDF")
-            
             image_path = os.path.join(self._temp_dir, "voucher_page.jpg")
             images[0].save(image_path, 'JPEG')
             return image_path
@@ -101,85 +105,76 @@ class VoucherExtractor:
             raise
 
     async def extract_data(self, file_path: str, source_file: Optional[str] = None) -> VoucherData:
-        """Extract data from voucher image using Gemini Vision API"""
+        """Extract data from voucher image using GPT-4o Vision."""
         try:
-            # Convert PDF to image if needed
             if file_path.lower().endswith('.pdf'):
                 image_path = self.convert_pdf_to_image(file_path)
             else:
                 image_path = file_path
 
-            # Load image
-            image = self.load_image(image_path)
+            image_b64 = self._encode_image(image_path)
 
-            # Prepare prompt for Gemini
-            prompt = """Extract the following information from this voucher image:
-            1. Booking Name (full name of the booking)
-            2. Booking Reference (unique reference number)
-            3. Trek Date (date of the trek/activity in YYYY-MM-DD format)
-            4. Head of File (name after 'Booking made by')
-            5. Request Date (date the booking was requested in YYYY-MM-DD format)
-            6. Product Type (either 'Mountain Gorillas' or 'Golden Monkeys')
-            7. Number of People/Permits (integer)
+            prompt = """Extract the following information from this voucher image.
 
-            Pay special attention to:
-            - Date formats (convert all dates to YYYY-MM-DD)
-            - Product type must be exactly 'Mountain Gorillas' or 'Golden Monkeys'
-            - Number of people must be a positive integer
-            - Booking reference should be in uppercase
+Return ONLY a JSON object with these exact keys (no extra text):
+{
+    "booking_name": "",
+    "booking_reference": "",
+    "trek_date": "YYYY-MM-DD",
+    "head_of_file": "",
+    "request_date": "YYYY-MM-DD",
+    "product_type": "",
+    "number_of_people": 0
+}
 
-            Return the data in JSON format with these exact keys:
-            {
-                "booking_name": "",
-                "booking_reference": "",
-                "trek_date": "YYYY-MM-DD",
-                "head_of_file": "",
-                "request_date": "YYYY-MM-DD",
-                "product_type": "",
-                "number_of_people": 0
-            }
+Rules:
+- Convert ALL dates to YYYY-MM-DD format
+- booking_reference should be uppercase
+- product_type must be exactly 'Mountain Gorillas' or 'Golden Monkeys'
+- number_of_people must be a positive integer
+- head_of_file is the name found after 'Booking made by'
+- If a field cannot be read confidently, leave it as an empty string or 0 for numbers"""
 
-            If you cannot extract a field with high confidence, leave it as an empty string or 0 for numbers."""
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500
+            )
 
-            # Generate response from Gemini
-            response = self.model.generate_content([prompt, image])
+            text = response.choices[0].message.content
+            if not text:
+                raise ValueError("No response from OpenAI API")
 
-            if not response or not response.text:
-                raise ValueError("No response from Gemini API")
+            json_start = text.find('{')
+            json_end = text.rfind('}') + 1
+            if json_start < 0 or json_end <= json_start:
+                raise ValueError("No valid JSON found in OpenAI response")
 
-            # Parse response
-            try:
-                # Extract JSON from response
-                json_str = response.text
-                # Find JSON object in the response
-                json_start = json_str.find('{')
-                json_end = json_str.rfind('}') + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = json_str[json_start:json_end]
-                    data = json.loads(json_str)
-                else:
-                    raise ValueError("No valid JSON found in response")
+            data = json.loads(text[json_start:json_end])
 
-                # Add derived fields
-                data['agent_client'] = data['booking_reference'][:3] if data['booking_reference'] else ''
-                data['confidence_score'] = 0.95  # High confidence with Gemini
-                data['source_file'] = source_file
+            data['agent_client'] = data.get('booking_reference', '')[:3] if data.get('booking_reference') else ''
+            data['confidence_score'] = 0.95
+            data['source_file'] = source_file
 
-                # Create VoucherData object
-                voucher_data = VoucherData(**data)
-                return voucher_data
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing JSON response: {e}")
-                raise ValueError("Invalid JSON response from API")
-            except Exception as e:
-                logger.error(f"Error processing extracted data: {e}")
-                raise
+            voucher_data = VoucherData(**data)
+            return voucher_data
 
         except Exception as e:
             logger.error(f"Error extracting voucher data from {source_file}: {str(e)}")
-            
-            # Provide more user-friendly error messages
             error_msg = str(e)
             if "Invalid date format" in error_msg:
                 error_msg = "Could not read the date format correctly. Please ensure dates are clearly visible."
@@ -189,15 +184,15 @@ class VoucherExtractor:
                 error_msg = "Could not determine the number of people. Please ensure it is clearly visible."
             elif "Could not convert PDF" in error_msg:
                 error_msg = "Could not process the PDF file. Please ensure it is a valid voucher scan."
-            
             raise ValueError(error_msg) from e
 
-def extract_voucher_data(file_path: str) -> dict:
-    """Helper function to extract data from a voucher file"""
+
+async def extract_voucher_data(file_path: str) -> dict:
+    """Helper function to extract data from a voucher file."""
     try:
         extractor = VoucherExtractor()
-        data = asyncio.run(extractor.extract_data(file_path, file_path))
+        data = await extractor.extract_data(file_path, file_path)
         return data.model_dump()
     except Exception as e:
         logger.error(f"Error in extract_voucher_data: {e}")
-        raise 
+        raise

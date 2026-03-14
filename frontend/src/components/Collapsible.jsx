@@ -7,7 +7,7 @@ export const Collapsible = ({ title, children, defaultOpen = false, className = 
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-4 rounded-lg ${className}`}
+        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg ${className}`}
       >
         <span className="text-base font-semibold">{title}</span>
         <svg

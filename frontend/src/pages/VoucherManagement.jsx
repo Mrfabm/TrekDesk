@@ -1,7 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { toast } from 'react-toastify';
 import { DocumentArrowUpIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 const VoucherManagement = () => {
@@ -17,14 +15,12 @@ const VoucherManagement = () => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'application/pdf'];
     if (!validTypes.includes(file.type)) {
       setError('Please upload a valid file (JPG, PNG, or PDF)');
       return;
     }
 
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('File size must be less than 10MB');
       return;
@@ -37,37 +33,69 @@ const VoucherManagement = () => {
       setExtractedData(null);
       setMissingFields([]);
 
+      // Step 1: Upload the file
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('files', file);
 
-      const response = await axios.post(
-        'http://localhost:8000/api/voucher/upload',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
+      const uploadResponse = await fetch('http://localhost:8000/api/voucher/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
 
-      if (response.data.success) {
-        setSuccess('Voucher processed successfully');
-        setExtractedData(response.data.extracted_data);
-        // Navigate to the booking details if a booking ID is returned
-        if (response.data.booking_id) {
-          setTimeout(() => {
-            navigate(`/bookings/${response.data.booking_id}`);
-          }, 2000);
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload voucher');
+      }
+
+      const uploadResults = await uploadResponse.json();
+      const uploaded = uploadResults.find(r => r.status === 'success');
+      if (!uploaded) {
+        throw new Error(uploadResults[0]?.error || 'Upload failed');
+      }
+
+      // Step 2: Extract data from the uploaded file
+      const activeBookingId = localStorage.getItem('activeBookingId');
+      const extractResponse = await fetch('http://localhost:8000/api/voucher/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          file_paths: [uploaded.path],
+          ...(activeBookingId && { booking_id: parseInt(activeBookingId) })
+        })
+      });
+
+      if (!extractResponse.ok) {
+        const err = await extractResponse.json();
+        throw new Error(err.detail || 'Extraction failed');
+      }
+
+      const extractResults = await extractResponse.json();
+      const result = extractResults[uploaded.path];
+
+      if (!result) {
+        throw new Error('No extraction result received');
+      }
+
+      if (result.status === 'success' || result.status === 'incomplete') {
+        setExtractedData(result.data);
+        if (result.status === 'incomplete') {
+          setMissingFields(result.missing_fields || []);
+          setError('Some required fields could not be extracted');
+        } else {
+          setSuccess('Voucher processed successfully');
         }
       } else {
-        setError('Some required fields could not be extracted');
-        setMissingFields(response.data.missing_fields || []);
-        setExtractedData(response.data.extracted_data);
+        throw new Error(result.error || 'Extraction failed');
       }
+
     } catch (err) {
       console.error('Error processing voucher:', err);
-      setError(err.response?.data?.detail || 'Error processing voucher');
+      setError(err.message || 'Error processing voucher');
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) {
@@ -87,6 +115,13 @@ const VoucherManagement = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow-sm p-6">
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
+            <span>Step 1: Passport Management</span>
+            <span>→</span>
+            <span className="font-medium text-blue-600">Step 2: Voucher Management</span>
+          </div>
+
           <div className="text-center mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-2">
               Voucher Management
@@ -141,9 +176,7 @@ const VoucherManagement = () => {
               <div className="flex">
                 <XCircleIcon className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    Error processing voucher
-                  </h3>
+                  <h3 className="text-sm font-medium text-red-800">Error processing voucher</h3>
                   <div className="mt-2 text-sm text-red-700">
                     <p>{error}</p>
                     {missingFields.length > 0 && (
@@ -162,9 +195,7 @@ const VoucherManagement = () => {
               <div className="flex">
                 <CheckCircleIcon className="h-5 w-5 text-green-400" />
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-green-800">
-                    {success}
-                  </p>
+                  <p className="text-sm font-medium text-green-800">{success}</p>
                 </div>
               </div>
             </div>
@@ -172,33 +203,49 @@ const VoucherManagement = () => {
 
           {extractedData && (
             <div className="mt-6 border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Extracted Data
-              </h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Extracted Data</h3>
               <div className="grid grid-cols-2 gap-4">
                 {renderField('Booking Name', extractedData.booking_name)}
-                {renderField('Booking Reference', extractedData.booking_ref)}
-                {renderField('Invoice Number', extractedData.invoice_no)}
-                {renderField('Number of Permits', extractedData.number_of_permits)}
-                {renderField('Voucher Number', extractedData.voucher_number)}
-                {renderField('Request Date', extractedData.request_date)}
-                {renderField('Trek Date', extractedData.trek_date)}
+                {renderField('Booking Reference', extractedData.booking_reference)}
                 {renderField('Head of File', extractedData.head_of_file)}
                 {renderField('Agent/Client', extractedData.agent_client)}
-                {renderField('Product', extractedData.product)}
-                {renderField('Number of People', extractedData.people)}
-                {renderField('Total Amount', extractedData.total_amount)}
-                {renderField('Paid Amount', extractedData.paid_amount)}
-                {renderField('Booking Status', extractedData.booking_status)}
-                {renderField('Payment Status', extractedData.payment_status)}
-                {renderField('Validation Status', extractedData.validation_status)}
+                {renderField('Product', extractedData.product_type)}
+                {renderField('Number of People', extractedData.number_of_people)}
+                {renderField('Trek Date', extractedData.trek_date)}
+                {renderField('Request Date', extractedData.request_date)}
               </div>
             </div>
           )}
+
+          {/* Navigation footer */}
+          <div className="mt-6 flex justify-between items-center border-t border-gray-200 pt-4">
+            <button
+              onClick={() => navigate('/passport-management')}
+              className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              ← Back: Passport Management
+            </button>
+            <button
+              onClick={async () => {
+                const activeBookingId = localStorage.getItem('activeBookingId');
+                if (activeBookingId) {
+                  await fetch(`http://localhost:8000/api/bookings/${activeBookingId}/request-confirmation`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                  });
+                  localStorage.removeItem('activeBookingId');
+                }
+                navigate('/bookings');
+              }}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+            >
+              Done - Go to Bookings
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default VoucherManagement; 
+export default VoucherManagement;

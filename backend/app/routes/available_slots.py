@@ -124,6 +124,8 @@ async def get_available_slots(
             "last_update": format_relative_time(most_recent_update)
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching {slot_type} slots: {str(e)}")
         raise HTTPException(

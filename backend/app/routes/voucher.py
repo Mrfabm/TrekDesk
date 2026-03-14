@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import logging
 from pydantic import BaseModel
@@ -12,11 +12,13 @@ from ..database import get_db
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = "uploads"
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(_BASE_DIR, "uploads", "vouchers")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class ExtractRequest(BaseModel):
     file_paths: List[str]
+    booking_id: Optional[int] = None
 
 class ExtractionResult(BaseModel):
     status: str  # "success", "error", "incomplete"
@@ -51,7 +53,8 @@ async def upload_voucher(
                 continue
 
             # Save file
-            file_path = os.path.join(UPLOAD_DIR, file.filename)
+            safe_name = "".join(c for c in file.filename if c.isalnum() or c in ('-', '_', '.'))
+            file_path = os.path.join(UPLOAD_DIR, safe_name)
             with open(file_path, "wb") as buffer:
                 content = await file.read()
                 buffer.write(content)
@@ -97,9 +100,8 @@ async def extract_data(
                 )
                 continue
             
-            # Extract data from voucher
-            voucher_data = await extract_voucher_data(file_path)
-            voucher_dict = voucher_data.model_dump()
+            # Extract data from voucher (helper already returns a dict)
+            voucher_dict = await extract_voucher_data(file_path)
             
             # Check if all required fields are present
             required_fields = [
@@ -116,24 +118,34 @@ async def extract_data(
                 )
                 continue
             
-            # Check if booking already exists
-            existing_booking = db.query(Booking).filter(
-                Booking.booking_ref == voucher_dict["booking_reference"]
-            ).first()
-            
-            if existing_booking:
-                # Update existing booking
-                existing_booking.update_from_voucher(voucher_dict)
-                db.commit()
-                logger.info(f"Updated existing booking: {existing_booking.booking_ref}")
+            if request.booking_id:
+                # Update the specific booking the user came from
+                target_booking = db.query(Booking).filter(
+                    Booking.id == request.booking_id
+                ).first()
+                if target_booking:
+                    target_booking.update_from_voucher(voucher_dict)
+                    db.commit()
+                    logger.info(f"Updated booking {request.booking_id} with voucher data")
+                else:
+                    logger.warning(f"Booking {request.booking_id} not found, skipping update")
             else:
-                # Create new booking
-                new_booking = Booking()
-                new_booking.user_id = current_user.id
-                new_booking.update_from_voucher(voucher_dict)
-                db.add(new_booking)
-                db.commit()
-                logger.info(f"Created new booking: {new_booking.booking_ref}")
+                # Check if booking already exists by booking reference
+                existing_booking = db.query(Booking).filter(
+                    Booking.booking_ref == voucher_dict["booking_reference"]
+                ).first()
+
+                if existing_booking:
+                    existing_booking.update_from_voucher(voucher_dict)
+                    db.commit()
+                    logger.info(f"Updated existing booking: {existing_booking.booking_ref}")
+                else:
+                    new_booking = Booking()
+                    new_booking.user_id = current_user.id
+                    new_booking.update_from_voucher(voucher_dict)
+                    db.add(new_booking)
+                    db.commit()
+                    logger.info(f"Created new booking: {new_booking.booking_ref}")
             
             results[file_path] = ExtractionResult(
                 status="success",

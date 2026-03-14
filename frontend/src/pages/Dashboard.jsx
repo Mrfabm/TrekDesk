@@ -75,27 +75,30 @@ const BookingSummary = ({ booking, availableSlots }) => (
 // Update the LowAvailabilityBookings component
 const LowAvailabilityBookings = ({ bookings, onExpand }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const lowAvailabilityBookings = bookings.filter(b => b.available_slots < 40);
+  const lowAvailabilityBookings = bookings.filter(b => {
+    const slots = parseInt(b.available_slots);
+    return b.status === 'provisional' && !isNaN(slots) && slots > 0 && slots < 40;
+  });
 
   const columns = [
-    { key: 'booking_name', label: 'Name' },
-    { key: 'location', label: 'Location' },
-    { key: 'date', label: 'Date' },
-    { 
-      key: 'available_slots', 
+    { accessor: 'booking_name', label: 'Name' },
+    { accessor: 'site', label: 'Site' },
+    { accessor: 'date', label: 'Date' },
+    {
+      accessor: 'available_slots',
       label: 'Available Slots',
-      render: (value) => (
+      render: (row) => (
         <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          {value} slots
+          {row.available_slots} slots
         </span>
       )
     },
-    { 
-      key: 'status', 
+    {
+      accessor: 'status',
       label: 'Status',
-      render: (value) => (
+      render: (row) => (
         <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          {value}
+          {row.status}
         </span>
       )
     }
@@ -374,7 +377,7 @@ const BookingsTable = ({ bookings }) => (
 );
 
 // Move StepTwo outside Dashboard component
-const StepTwo = ({ formData, handleInputChange, handleProvisionalHold, setBookingStep, selectedSlot, availableSlots, error, success }) => {
+const StepTwo = ({ formData, handleInputChange, handleProvisionalHold, setBookingStep, selectedSlot, availableSlots, error, success, bookingIntent }) => {
   return (
     <div className="space-y-4">
       {/* Selected Slot Info */}
@@ -449,7 +452,7 @@ const StepTwo = ({ formData, handleInputChange, handleProvisionalHold, setBookin
           disabled={!formData.bookingName || !formData.numberOfPeople}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Confirm Hold
+          {bookingIntent === 'requested' ? 'Confirm Booking' : 'Confirm Hold'}
         </button>
       </div>
 
@@ -474,6 +477,7 @@ const Dashboard = () => {
   const [userRole, setUserRole] = useState('');
   const [bookingStep, setBookingStep] = useState(1);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [bookingIntent, setBookingIntent] = useState('provisional'); // 'provisional' or 'confirmed'
   const [formData, setFormData] = useState({
     bookingName: '',
     numberOfPeople: '',
@@ -549,7 +553,7 @@ const Dashboard = () => {
           endpoint += '/my-bookings';
           break;
         case 'all-bookings':
-          endpoint += '/all';
+          // use base /api/bookings endpoint
           break;
         case 'recent-bookings':
           endpoint += '/recent-bookings';
@@ -688,23 +692,20 @@ const Dashboard = () => {
       }
 
       const data = await response.json();
-      setSuccess(isEditMode ? 'Booking updated successfully' : 'Booking confirmed successfully');
 
-      // Clear edit mode data
       if (isEditMode) {
         localStorage.removeItem('editingBooking');
-        // Navigate back to bookings page
         navigate('/bookings');
+      } else if (bookingIntent === 'requested') {
+        // Booking confirmed → proceed to passport management, then voucher management
+        localStorage.setItem('activeBookingId', data.id);
+        navigate('/passport-management');
       } else {
-        // Reset form for new booking
-        setFormData({
-          bookingName: '',
-          numberOfPeople: '',
-          date: null,
-          site: '',
-          product: ''
-        });
+        // Provisional hold → reset form, stay on page, refresh alert panel
+        setSuccess('Hold placed successfully.');
+        setFormData({ bookingName: '', numberOfPeople: '', date: null, site: '', product: '' });
         setBookingStep(1);
+        fetchBookings(activeTab);
       }
 
     } catch (error) {
@@ -732,6 +733,16 @@ const Dashboard = () => {
         </h2>
         {isHovering && availableSlots > 0 && (
           <button
+            onClick={() => {
+              setBookingIntent('requested');
+              setSelectedSlot({
+                date: formData.date,
+                site: formData.site,
+                product: formData.product,
+                availableSlots
+              });
+              setBookingStep(2);
+            }}
             className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg shadow-sm hover:shadow transition-all duration-200 font-medium text-sm"
           >
             Confirm booking
@@ -831,6 +842,7 @@ const Dashboard = () => {
               ) : (
                 <button
                   onClick={() => {
+                    setBookingIntent('provisional');
                     setSelectedSlot({
                       date: formData.date,
                       site: formData.site,
@@ -926,7 +938,7 @@ const Dashboard = () => {
           {/* Left Panel - Booking Form */}
           <div className="w-1/2">
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-              {bookingStep === 1 ? <StepOne /> : <StepTwo 
+              {bookingStep === 1 ? <StepOne /> : <StepTwo
                 formData={formData}
                 handleInputChange={handleInputChange}
                 handleProvisionalHold={handleProvisionalHold}
@@ -935,6 +947,7 @@ const Dashboard = () => {
                 availableSlots={availableSlots}
                 error={error}
                 success={success}
+                bookingIntent={bookingIntent}
               />}
             </div>
           </div>

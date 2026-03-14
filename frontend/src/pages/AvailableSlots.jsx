@@ -72,7 +72,7 @@ const AvailableSlots = () => {
                 <div className="bg-white rounded-lg shadow-sm mb-4">
                     <div className="p-4">
                         <div className="flex flex-col md:flex-row md:items-center md:space-x-6">
-                            <h1 className="text-2xl font-semibold text-gray-900 mb-4 md:mb-0 md:w-1/4">Slots Available</h1>
+                            <h1 className="text-base font-semibold text-gray-900 mb-4 md:mb-0 md:w-1/4">Slots Available</h1>
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -134,16 +134,16 @@ const AvailableSlots = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead>
                                     <tr className="bg-gray-50">
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available Slots</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available Slots</th>
+                                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {slots.map(slot => (
                                         <tr key={slot.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{slot.date}</td>
-                                            <td className="px-6 py-3 whitespace-nowrap text-sm">
+                                            <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-700">{slot.date}</td>
+                                            <td className="px-3 py-2.5 whitespace-nowrap text-xs">
                                                 {slot.slots === "Sold Out" ? (
                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                         Sold Out
@@ -154,7 +154,7 @@ const AvailableSlots = () => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{slot.relative_time}</td>
+                                            <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500">{slot.relative_time}</td>
                                         </tr>
                                     ))}
                                 </tbody>

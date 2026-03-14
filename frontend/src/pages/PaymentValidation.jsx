@@ -14,6 +14,12 @@ const PaymentValidation = () => {
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Authorization request state
+  const [authModal, setAuthModal] = useState(false);
+  const [authReason, setAuthReason] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState('');
+
   useEffect(() => {
     const fetchBookingDetails = async () => {
       try {
@@ -125,6 +131,33 @@ const PaymentValidation = () => {
     if (received >= totalAmount) return 'fully_paid';
     if (received > 0) return 'deposit_paid';
     return 'pending';
+  };
+
+  const handleFlagAuthorization = async () => {
+    if (!authReason.trim()) return;
+    setAuthSubmitting(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/authorization/flag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ booking_id: parseInt(bookingId), reason: authReason }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAuthModal(false);
+        setAuthReason('');
+        setAuthSuccess('Booking owner and admins have been notified that authorization is required.');
+      } else {
+        setError(data.detail || 'Failed to flag for authorization');
+      }
+    } catch {
+      setError('Failed to flag for authorization');
+    } finally {
+      setAuthSubmitting(false);
+    }
   };
 
   // Format currency helper
@@ -275,24 +308,78 @@ const PaymentValidation = () => {
             </div>
           )}
 
+          {authSuccess && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4">
+              <p className="text-blue-700 dark:text-blue-200">{authSuccess}</p>
+            </div>
+          )}
+
           {/* Always show the buttons */}
-          <div className="flex justify-end space-x-4">
+          <div className="flex justify-between items-center">
             <button
               type="button"
-              onClick={() => navigate('/bookings')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              onClick={() => setAuthModal(true)}
+              className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-md"
             >
-              Cancel
+              Flag for Authorization
             </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-            >
-              {hasPreviousPayment() ? 'Update Payment/Validation' : 'Validate Payment'}
-            </button>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={() => navigate('/bookings')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+              >
+                {hasPreviousPayment() ? 'Update Payment/Validation' : 'Validate Payment'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
+
+      {/* Authorization Request Modal */}
+      {authModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Flag for Authorization</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Describe the issue. The booking owner and admins will be notified and asked to submit an authorization request.
+            </p>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Reason <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={authReason}
+              onChange={e => setAuthReason(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white"
+              placeholder="e.g. Payment overdue, slots running low, client requesting special terms…"
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => { setAuthModal(false); setAuthReason(''); }}
+                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleFlagAuthorization}
+                disabled={authSubmitting || !authReason.trim()}
+                className="px-4 py-2 text-sm text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50"
+              >
+                {authSubmitting ? 'Submitting…' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

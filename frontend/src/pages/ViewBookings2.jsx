@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import EnhancedTable from '../components/EnhancedTable';
-import { allBookingsData } from './ViewBookings1';
 
 const ViewBookings2 = () => {
   const location = useLocation();
@@ -9,8 +8,16 @@ const ViewBookings2 = () => {
   const searchParams = new URLSearchParams(location.search);
   const filterParam = searchParams.get('filter');
 
-  // Use allBookingsData directly from ViewBookings1
-  const allData = React.useMemo(() => allBookingsData, []);
+  const [allData, setAllData] = useState([]);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/api/bookings', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(r => r.json())
+      .then(data => setAllData(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, []);
 
   // Updated handleActionClick to use existing routes
   const handleActionClick = (status, bookingId) => {
@@ -33,11 +40,36 @@ const ViewBookings2 = () => {
     }
   };
 
-  // Filter data function (same as ViewBookings1)
   const filterData = (data) => {
     if (!filterParam) return data;
-    // ... (same filter logic as ViewBookings1)
-    return data;
+    const today = new Date().toISOString().split('T')[0];
+    switch (filterParam) {
+      case 'quick_actions':
+        return data.filter(b => b.status === 'requested' || ['ok_to_purchase_full','ok_to_purchase_deposit','do_not_purchase'].includes(b.validation_status));
+      case 'today':
+        return data.filter(b => b.date?.split('T')[0] === today);
+      case 'critical':
+        return data.filter(b => {
+          if (b.payment_status === 'overdue') return true;
+          if (b.balance_due_date && b.payment_status !== 'fully_paid' && new Date(b.balance_due_date) < new Date()) return true;
+          if (b.payment_status === 'deposit_paid') { const d = Math.ceil((new Date(b.date) - new Date()) / 86400000); if (d > 0 && d <= 45) return true; }
+          if (b.payment_status === 'pending' && b.deposit_due_date && new Date(b.deposit_due_date) < new Date()) return true;
+          return false;
+        });
+      case 'amendments': return data.filter(b => b.status === 'amended' || b.status === 'amendment_requested');
+      case 'cancellations': return data.filter(b => b.payment_status === 'cancelled' || b.status === 'cancellation_requested');
+      case 'pending_payments': return data.filter(b => b.status !== 'provisional' && b.payment_status !== 'fully_paid');
+      case 'confirmed_full_payment': return data.filter(b => b.status === 'confirmed' && b.payment_status === 'fully_paid');
+      case 'confirmed_deposit': return data.filter(b => b.status === 'confirmed' && b.payment_status === 'deposit_paid');
+      case 'confirmed_partial': return data.filter(b => b.status === 'confirmed' && b.payment_status === 'partial');
+      case 'confirmed_overdue': return data.filter(b => b.status === 'confirmed' && b.payment_status === 'overdue');
+      case 'confirmation_requests': return data.filter(b => b.status === 'requested');
+      case 'ok_to_purchase_full': return data.filter(b => b.validation_status === 'ok_to_purchase_full');
+      case 'ok_to_purchase_deposit': return data.filter(b => b.validation_status === 'ok_to_purchase_deposit');
+      case 'do_not_purchase': return data.filter(b => b.validation_status === 'do_not_purchase');
+      case 'confirmed_bookings': return data.filter(b => b.status === 'confirmed');
+      default: return data;
+    }
   };
 
   // Helper functions for status colors (same as ViewBookings1)
@@ -193,7 +225,7 @@ const ViewBookings2 = () => {
     },
     {
       header: "Booking Status",
-      accessor: "booking_status",
+      accessor: "status",
       cell: (value) => (
         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full truncate ${getBookingStatusColor(value)}`}>
           {value.charAt(0).toUpperCase() + value.slice(1)}

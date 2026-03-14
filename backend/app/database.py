@@ -13,7 +13,9 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
     "postgresql://postgres:admin@localhost:5432/booking_db"  # Use your actual password here
 )
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# SQLite requires check_same_thread=False for multi-threaded use
+connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
