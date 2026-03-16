@@ -1,19 +1,25 @@
 # TrekDesk
 
-A full-stack booking management system for gorilla and golden monkey trekking operations. Built to handle the complete booking lifecycle — from slot availability scraping and passport OCR to finance tracking and voucher generation.
+A full-stack booking management system for gorilla and golden monkey trekking operations in Rwanda. Built to handle the complete booking lifecycle — from slot availability scraping and passport OCR to finance tracking, authorization workflows, and voucher generation.
 
 ---
 
 ## Features
 
-- **Booking Management** — Create, track, and manage trekking bookings with status workflows
-- **Slot Availability** — Real-time scraping of gorilla and golden monkey permit availability
-- **Passport OCR** — Automated passport data extraction using EasyOCR and Tesseract
-- **Finance Dashboard** — Payment tracking, validation, and financial reporting
+- **Booking Management** — Create, track, and manage trekking bookings across a full status lifecycle (provisional → secured/cancelled)
+- **Slot Availability** — Continuous background scraping of gorilla and golden monkey permit availability
+- **Finance Dashboard** — Payment validation, chase management, amendment fees, overdue tracking
+- **AR / AP Finance** — Accounts Receivable (agent payments due), Accounts Payable (permits purchased), with full filter suite
+- **Rolling Deposits** — Per-agent deposit accounts with top-up, applied, and return transaction ledger
+- **Authorization Workflow** — High-value bookings requiring authorizer sign-off; auto-flagging on startup; appeal mechanism
+- **Agent & Client Management** — Trusted flags, rolling deposit config, payment terms per agent
+- **Chase Management** — Automated weekly chase alerts for untrusted agents (up to 5); auto-release
+- **Amendment & Cancellation** — Date change requests with 20%/100% fee rules; cancellation requests with admin confirmation
+- **Passport OCR** — Automated passport data extraction via GPT-4o Vision, linked per booking
 - **Voucher Management** — Generate and manage booking vouchers
-- **Notifications** — In-app notification center for booking alerts
-- **User Management** — Role-based access control (Superuser, Admin, Staff)
-- **Advanced Tracking** — Detailed booking filters and export options
+- **Notifications** — In-app notification center for booking alerts and system events
+- **User Management** — Role-based access control (5 roles)
+- **Slot Alerts** — Automated urgency alerts when permit slots drop below thresholds
 
 ---
 
@@ -25,21 +31,31 @@ A full-stack booking management system for gorilla and golden monkey trekking op
 - **Alembic** — Database migrations
 - **EasyOCR / Tesseract** — Passport OCR processing
 - **Playwright** — Headless browser scraping
-- **APScheduler** — Scheduled scraping jobs
+- **APScheduler** — Scheduled chase, overdue, and slot alert jobs
 - **python-jose** — JWT authentication
 - **OpenAI / Gemini** — AI-assisted data extraction
 
 ### Frontend
 - **React** — UI framework
 - **Tailwind CSS** — Styling
-- **Zustand** — State management
-- **TanStack Table** — Advanced data tables
-- **Radix UI** — Accessible UI components
-- **Lucide React** — Icons
+- **Recharts** — Charts
+- **Heroicons** — Icons
 
 ### Infrastructure
-- **PostgreSQL** — Primary database (via Docker)
-- **Docker** — Container for local database
+- **PostgreSQL 16** — Primary database
+- **Docker** — Container for local PostgreSQL (`imai-postgres`)
+
+---
+
+## Roles & Access
+
+| Role | Access |
+|------|--------|
+| `user` | Own bookings only |
+| `admin` | All bookings, permit purchasing, full dashboard |
+| `finance_admin` | Finance Dashboard, AR/AP, payment validation, chase |
+| `superuser` | Everything — user management, full system visibility |
+| `authorizer` | Authorizer Dashboard — approves/declines authorization requests |
 
 ---
 
@@ -61,7 +77,7 @@ cd TrekDesk
 ### 2. Start PostgreSQL with Docker
 
 ```bash
-docker run -d --name trekdesk-postgres \
+docker run -d --name imai-postgres \
   -e POSTGRES_PASSWORD=yourpassword \
   -e POSTGRES_DB=booking_db \
   -p 5432:5432 \
@@ -94,12 +110,6 @@ venv\Scripts\activate        # Windows
 
 pip install -r requirements.txt
 playwright install chromium
-
-# Create database tables
-python -c "from app.database import Base, engine; from app.models import *; Base.metadata.create_all(bind=engine)"
-
-# Create superuser
-python create_superuser.py
 ```
 
 ### 5. Start the backend
@@ -107,6 +117,11 @@ python create_superuser.py
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+On first run, the app automatically:
+- Creates all 19 database tables
+- Seeds Sites, Products, and system users
+- Runs enum migrations for PostgreSQL
 
 ### 6. Set up and start the frontend
 
@@ -121,14 +136,28 @@ npm start
 - Frontend: http://localhost:3000
 - API docs: http://localhost:8000/docs
 
-### Default login
+---
 
-| Field    | Value               |
-|----------|---------------------|
-| Email    | admin@example.com   |
-| Password | admin123            |
+## Default Credentials
 
-> Change the default password after first login.
+| Email | Password | Role |
+|-------|----------|------|
+| admin@example.com | admin123 | superuser |
+| admin@test.com | admin123 | admin |
+| user@test.com | user123 | user |
+| finance@test.com | finance123 | finance_admin |
+| authorizer@test.com | auth123 | authorizer |
+
+> Change default passwords after first login in a production environment.
+
+### (Optional) Seed demo scenarios
+
+To populate the database with 29 realistic booking scenarios covering all statuses, AR/AP states, and rolling deposit examples:
+
+```bash
+cd backend
+python seed_scenarios.py
+```
 
 ---
 
@@ -138,22 +167,31 @@ npm start
 TrekDesk/
 ├── backend/
 │   ├── app/
-│   │   ├── auth/          # JWT authentication
-│   │   ├── models/        # SQLAlchemy models
+│   │   ├── models/        # SQLAlchemy models (19 tables)
 │   │   ├── routes/        # API route handlers
-│   │   ├── services/      # Email and background services
+│   │   ├── services/      # Rolling deposit, email, background services
 │   │   └── utils/         # OCR and passport utilities
 │   ├── migrations/        # Alembic migration scripts
-│   ├── scripts/           # Database management scripts
-│   ├── tests/             # Backend test suite
+│   ├── seed_scenarios.py  # Demo data seed script (29 scenarios)
+│   ├── run.py             # Start with PostgreSQL
+│   ├── run_sqlite.py      # Start with SQLite (offline/dev)
 │   └── requirements.txt
 └── frontend/
     └── src/
         ├── components/    # Reusable UI components
         ├── pages/         # Application pages
-        ├── context/       # React context providers
         └── utils/         # API client and helpers
 ```
+
+---
+
+## Database
+
+See [docs/DATABASE.md](docs/DATABASE.md) for:
+- All 19 tables with columns, types, and relationships
+- Booking status lifecycle diagram
+- Migration to cloud guide (Supabase, Railway, AWS RDS, Docker Compose)
+- Entity relationship diagram
 
 ---
 
