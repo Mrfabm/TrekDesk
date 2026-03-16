@@ -1,0 +1,16 @@
+PASSPORT
+Type: P
+Country Code: USA
+Passport No: AB1234567
+Surname: SMITH
+Given Names: JOHN MICHAEL
+Nationality: UNITED STATES OF AMERICA
+Date of Birth: 15 JAN 1980
+Place of Birth: NEW YORK, USA
+Sex: M
+Date of Issue: 01 JAN 2020
+Date of Expiry: 01 JAN 2030
+Authority: U.S. DEPARTMENT OF STATE
+
+P<USASMITH<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<
+AB123456789USA8001015M3001012<<<<<<<<<<<<<<2 

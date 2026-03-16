@@ -1,0 +1,219 @@
+{
+  "version": 2.3,
+  "structure": {
+    "root": "booking-app",
+    "directories": {
+      "backend": {
+        "path": "backend/",
+        "children": {
+          "app": {
+            "path": "app/",
+            "children": {
+              "models": {
+                "path": "models/",
+                "description": "Database models",
+                "files": {
+                  "available_slots.py": {
+                    "description": "Manages slot availability for different products",
+                    "functionality": ["Track available slots", "Update slot counts", "Check slot status"]
+                  },
+                  "scrape_status.py": {
+                    "description": "Tracks scraping status",
+                    "functionality": ["Monitor scraping progress", "Update scrape status"]
+                  },
+                  "user.py": {
+                    "description": "User model and authentication",
+                    "functionality": ["User management", "Role-based access", "Authentication"]
+                  },
+                  "booking.py": {
+                    "description": "Booking management",
+                    "functionality": ["Create bookings", "Update status", "Track changes"]
+                  },
+                  "activity_log.py": {
+                    "description": "Activity logging",
+                    "functionality": ["Log user actions", "Track system events"]
+                  },
+                  "site.py": {
+                    "description": "Site and product management",
+                    "functionality": ["Site configuration", "Product management"]
+                  },
+                  "payment.py": {
+                    "description": "Payment tracking",
+                    "functionality": ["Payment status", "Transaction records"]
+                  },
+                  "passport_data.py": {
+                    "description": "Passport information",
+                    "functionality": ["Store passport details", "Validate data"]
+                  },
+                  "notification.py": {
+                    "description": "Notification system",
+                    "functionality": ["Send notifications", "Track delivery"]
+                  }
+                }
+              },
+              "routes": {
+                "path": "routes/",
+                "description": "API endpoints",
+                "files": {
+                  "available_slots.py": {
+                    "description": "Slot availability endpoints",
+                    "endpoints": [
+                      "GET /api/available-slots - Get available slots",
+                      "POST /api/available-slots - Update slot availability"
+                    ]
+                  },
+                  "auth.py": {
+                    "description": "Authentication endpoints",
+                    "endpoints": [
+                      "POST /api/auth/login - User login",
+                      "POST /api/auth/logout - User logout",
+                      "GET /api/auth/me - Get current user"
+                    ]
+                  },
+                  "users.py": {
+                    "description": "User management endpoints",
+                    "endpoints": [
+                      "GET /api/users - List users",
+                      "POST /api/users - Create user",
+                      "PUT /api/users/{id} - Update user",
+                      "DELETE /api/users/{id} - Delete user"
+                    ]
+                  },
+                  "bookings.py": {
+                    "description": "Booking management endpoints",
+                    "endpoints": [
+                      "GET /api/bookings - List bookings",
+                      "POST /api/bookings - Create booking",
+                      "PUT /api/bookings/{id} - Update booking",
+                      "DELETE /api/bookings/{id} - Delete booking"
+                    ]
+                  },
+                  "notifications.py": {
+                    "description": "Notification endpoints",
+                    "endpoints": [
+                      "GET /api/notifications - List notifications",
+                      "POST /api/notifications - Send notification"
+                    ]
+                  },
+                  "finance.py": {
+                    "description": "Financial endpoints",
+                    "endpoints": [
+                      "GET /api/finance/payments - List payments",
+                      "POST /api/finance/payments - Record payment"
+                    ]
+                  },
+                  "passport.py": {
+                    "description": "Passport data endpoints",
+                    "endpoints": [
+                      "GET /api/passport - Get passport data",
+                      "POST /api/passport - Add passport data"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "frontend": {
+        "path": "frontend/",
+        "children": {
+          "src": {
+            "path": "src/",
+            "children": {
+              "pages": {
+                "path": "pages/",
+                "description": "React components for each page",
+                "files": {
+                  "CreateBooking.jsx": {
+                    "description": "Booking creation interface",
+                    "components": [
+                      "StepOne - Initial slot selection",
+                      "StepTwo - Booking details",
+                      "BookingSummary - Booking summary table"
+                    ],
+                    "functionality": [
+                      "Two-step booking process",
+                      "Slot availability check",
+                      "Site and product selection",
+                      "Provisional hold creation",
+                      "Real-time summary updates"
+                    ]
+                  },
+                  "Bookings.jsx": {
+                    "description": "Booking management interface",
+                    "functionality": [
+                      "List all bookings",
+                      "Filter bookings",
+                      "Update booking status",
+                      "Delete bookings"
+                    ]
+                  },
+                  "Login.jsx": {
+                    "description": "Authentication interface",
+                    "functionality": [
+                      "User login",
+                      "Role-based redirection",
+                      "Error handling"
+                    ]
+                  },
+                  "Dashboard.jsx": {
+                    "description": "Main dashboard interface",
+                    "functionality": [
+                      "Overview statistics",
+                      "Quick actions",
+                      "Recent activities"
+                    ]
+                  },
+                  "Settings.jsx": {
+                    "description": "Application settings",
+                    "functionality": [
+                      "User preferences",
+                      "System configuration"
+                    ]
+                  }
+                }
+              },
+              "components": {
+                "path": "components/",
+                "description": "Reusable React components",
+                "files": {
+                  "BookingStatusNav.jsx": "Navigation for booking status",
+                  "QuickActions.jsx": "Quick action buttons",
+                  "EnhancedTable.jsx": "Advanced table component"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "features": {
+    "booking": {
+      "description": "Core booking functionality",
+      "components": [
+        "Two-step booking process",
+        "Slot availability check",
+        "Provisional hold system",
+        "Booking management"
+      ]
+    },
+    "authentication": {
+      "description": "User authentication system",
+      "components": [
+        "Login/Logout",
+        "Role-based access",
+        "Session management"
+      ]
+    },
+    "notifications": {
+      "description": "Notification system",
+      "components": [
+        "Email notifications",
+        "In-app notifications",
+        "Status updates"
+      ]
+    }
+  }
+} 

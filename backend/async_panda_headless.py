@@ -147,13 +147,28 @@ async def scrape_slots(start_offset=0):
             try:
                 browser = await p.chromium.launch(
                     headless=True,
-                    args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars',
+                        '--disable-extensions',
+                    ]
                 )
-                
+
                 # Create single context for all tabs
                 context = await browser.new_context(
                     user_agent=random.choice(USER_AGENTS),
-                    viewport={'width': 1920, 'height': 1080}
+                    viewport={'width': 1280, 'height': 720},
+                    extra_http_headers={
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    }
+                )
+                # Prevent headless detection via navigator.webdriver
+                await context.add_init_script(
+                    'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
                 )
                 
                 # Process all batches in parallel

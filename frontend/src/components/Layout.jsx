@@ -105,6 +105,12 @@ const Layout = ({ children }) => {
             </svg>
             <span className="group-hover:translate-x-1 transition-transform duration-200">Finance Dashboard</span>
           </Link>
+          <Link to="/finance-ar" className={navLinkClass}>
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">AR / AP</span>
+          </Link>
           <Link to="/bookings" className={navLinkClass}>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -174,13 +180,15 @@ const Layout = ({ children }) => {
 
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {/* Home Link */}
-          <Link to="/" className={navLinkClass}>
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            <span className="group-hover:translate-x-1 transition-transform duration-200">Home</span>
-          </Link>
+          {/* Home Link — hidden for finance_admin (Finance Dashboard is their home) */}
+          {userRole !== 'finance_admin' && (
+            <Link to="/" className={navLinkClass}>
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              <span className="group-hover:translate-x-1 transition-transform duration-200">Home</span>
+            </Link>
+          )}
 
           {renderNavItems()}
         </nav>

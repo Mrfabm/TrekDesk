@@ -164,3 +164,18 @@ node_modules
 backend/uploads/
 backend/app.db
 backend/*.log
+
+# Sensitive / local-only
+openai_key.txt
+backend/trekdesk.db
+*.flag
+.claude/
+
+# Root-level package artifacts
+/package.json
+/package-lock.json
+
+# Dashboard prototype uploads and databases
+dashboard/backend/uploads/
+dashboard/backend/app.db
+dashboard/backend/*.db

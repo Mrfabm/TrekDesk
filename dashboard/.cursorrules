@@ -1,0 +1,273 @@
+{
+
+  "version": 2.2,
+
+  "structure": {
+
+    "root": "booking-app",
+
+    "directories": {
+
+      "backend": {
+
+        "path": "backend/",
+
+        "children": {
+
+          "app": {
+
+            "path": "app/",
+
+            "children": {
+
+              "models": {
+
+                "path": "models/",
+
+                "description": "Database models",
+
+                "files": [
+
+                  "available_slots.py",
+
+                  "scrape_status.py",
+
+                  "user.py",
+
+                  "booking.py",
+
+                  "activity_log.py",
+
+                  "site.py",
+
+                  "payment.py",
+
+                  "passport_data.py",
+
+                  "notification.py",
+
+                  "__init__.py"
+
+                ]
+
+              },
+
+              "routes": {
+
+                "path": "routes/",
+
+                "description": "API endpoints",
+
+                "files": [
+
+                  "available_slots.py",
+
+                  "auth.py",
+
+                  "users.py",
+
+                  "bookings.py",
+
+                  "notifications.py",
+
+                  "finance.py",
+
+                  "passport.py",
+
+                  "__init__.py"
+
+                ]
+
+              }
+
+            }
+
+          },
+
+          "scripts": {
+
+            "path": "scripts/",
+
+            "description": "Database management scripts",
+
+            "files": {
+
+              "clear_data.py": {
+
+                "description": "Clear specific tables while preserving users and site data",
+
+                "affects": ["bookings", "payments", "activity_logs", "notifications", "passport_data"]
+
+              },
+
+              "reset_tables.py": {
+
+                "description": "Reset and reinitialize site and product data",
+
+                "data": {
+
+                  "sites": ["Volcanoes National Park"],
+
+                  "products": {
+
+                    "Mountain Gorillas": 1500,
+
+                    "Golden Monkeys": 100
+
+                  }
+
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+
+      },
+
+      "frontend": {
+
+        "pages": {
+
+          "path": "src/pages/",
+
+          "description": "React components representing full pages",
+
+          "naming": "PascalCase.jsx",
+
+          "pages": {
+
+            "Home": {
+
+              "description": "Admin dashboard with product filtering and booking stats",
+
+              "features": {
+
+                "productFilter": {
+
+                  "options": ["Choose All", "Mountain Gorillas", "Golden Monkeys"],
+
+                  "affects": ["stats", "filterButtons", "bookingDisplay"]
+
+                },
+
+                "advancedFilters": {
+
+                  "layout": "grid",
+
+                  "filters": ["noSlots", "unpaid", "topUpDue", "cancelled", "amended"]
+
+                }
+
+              }
+
+            },
+
+            "Bookings": {
+
+              "description": "Bookings management with filtered views",
+
+              "features": {
+
+                "validation_status": {
+
+                  "display": {
+
+                    "pending": {
+
+                      "text": "Pending",
+
+                      "color": "text-gray-600"
+
+                    },
+
+                    "ok_to_purchase_full": {
+
+                      "text": "OK to Purchase (Full)",
+
+                      "color": "text-green-600"
+
+                    },
+
+                    "ok_to_purchase_deposit": {
+
+                      "text": "OK to Purchase (Deposit)",
+
+                      "color": "text-yellow-600"
+
+                    },
+
+                    "do_not_purchase": {
+
+                      "text": "Do Not Purchase",
+
+                      "color": "text-red-600"
+
+                    }
+
+                  }
+
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+
+    }
+
+  },
+
+  "rules": {
+
+    "database": {
+
+      "management": {
+
+        "scripts": {
+
+          "clear_data.py": {
+
+            "description": "Clear specific tables while preserving users and site data",
+
+            "tables": ["bookings", "payments", "activity_logs", "notifications", "passport_data"]
+
+          },
+
+          "reset_tables.py": {
+
+            "description": "Reset and reinitialize site and product data",
+
+            "data": {
+
+              "sites": ["Volcanoes National Park"],
+
+              "products": {
+
+                "Mountain Gorillas": 1500,
+
+                "Golden Monkeys": 100
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+
+    }
+
+  }
+
+} 

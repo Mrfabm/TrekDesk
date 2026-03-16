@@ -641,14 +641,34 @@ async def send_to_finance(
             detail=str(e)
         )
 
-def _create_payment_for_booking(booking: Booking, db: Session):
-    """Create a pending Payment record for a booking if one doesn't exist yet."""
+def _create_payment_for_booking(booking: Booking, db: Session, confirmed_by_id: int | None = None):
+    """
+    Create a Payment record for a booking using the agent's payment terms.
+    If the agent has a rolling deposit, auto-apply it (deposit or full based on 45-day rule).
+    """
+    from ..services.rolling_deposit import calculate_due_dates, apply_rolling_deposit
+    from ..models.agent_client import AgentClient, PaymentTermsAnchor
+
     if booking.payment:
         return
+
     unit_cost = float(booking.product_rel.unit_cost) if booking.product_rel else 0
-    units = booking.people or 0
-    total = unit_cost * units
-    deposit_amount = round(total * 0.3, 2)  # 30% deposit by default
+    units     = booking.people or 0
+    total     = unit_cost * units
+    deposit_amount = round(total * 0.3, 2)
+
+    ac = booking.agent_client_rel
+
+    if ac:
+        deposit_due, balance_due_dt, require_full = calculate_due_dates(booking, ac)
+    else:
+        deposit_due   = datetime.utcnow() + timedelta(days=14)
+        balance_due_dt = (
+            datetime.combine(booking.date, datetime.min.time()) - timedelta(days=45)
+            if booking.date else datetime.utcnow() + timedelta(days=30)
+        )
+        require_full = False
+
     payment = Payment(
         booking_id=booking.id,
         payment_status=PaymentStatus.PENDING,
@@ -659,10 +679,26 @@ def _create_payment_for_booking(booking: Booking, db: Session):
         deposit_amount=deposit_amount,
         deposit_paid=0,
         balance_due=total,
-        deposit_due_date=datetime.utcnow() + timedelta(days=14),
-        balance_due_date=booking.date - timedelta(days=45) if booking.date else datetime.utcnow() + timedelta(days=30),
+        deposit_due_date=deposit_due,
+        balance_due_date=balance_due_dt,
     )
     db.add(payment)
+    db.flush()  # give payment an id
+
+    # Auto-apply rolling deposit if available
+    if ac and ac.has_rolling_deposit and ac.rolling_deposit_balance > 0:
+        applied = apply_rolling_deposit(db, booking, ac, payment, confirmed_by_id)
+        if not applied:
+            # Insufficient balance — notify finance
+            create_simple_notification(
+                db,
+                confirmed_by_id or booking.user_id,
+                "Rolling Deposit Insufficient",
+                f"Booking '{booking.booking_name}' for {ac.name}: rolling deposit balance "
+                f"${ac.rolling_deposit_balance:.2f} is below required "
+                f"{'full' if require_full else 'deposit'} amount ${total if require_full else deposit_amount:.2f}. "
+                f"Manual action required."
+            )
 
 
 @router.post("/{booking_id}/confirm")
@@ -682,7 +718,7 @@ async def confirm_booking(
         raise HTTPException(status_code=400, detail="Only requested bookings can be confirmed")
 
     booking.booking_status = BookingStatus.CONFIRMED
-    _create_payment_for_booking(booking, db)
+    _create_payment_for_booking(booking, db, confirmed_by_id=current_user.id)
     create_simple_notification(db, booking.user_id, "Booking Confirmed",
         f"Your booking '{booking.booking_name}' has been confirmed.")
     db.commit()

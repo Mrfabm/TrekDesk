@@ -4,6 +4,12 @@ import { useNavigate } from 'react-router-dom';
 const API = 'http://localhost:8000/api';
 const token = () => localStorage.getItem('token');
 
+const ANCHOR_LABELS = {
+  from_request: 'Days from request date',
+  from_authorization: 'Days from authorization date',
+  before_trek: 'Days before trek date',
+};
+
 const EMPTY_FORM = {
   name: '',
   type: 'agent',
@@ -12,6 +18,10 @@ const EMPTY_FORM = {
   email: '',
   phone: '',
   notes: '',
+  payment_terms_deposit_days: 7,
+  payment_terms_balance_days: 45,
+  payment_terms_anchor: 'from_request',
+  rolling_deposit_limit: 0,
 };
 
 const inputCls =
@@ -199,7 +209,43 @@ const AgentManagement = () => {
               </label>
             </div>
           </div>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+
+          {/* Payment Terms */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Payment Terms</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Deposit due (days)</label>
+                <input type="number" min="1" value={newAgent.payment_terms_deposit_days}
+                  onChange={e => setNewAgent(a => ({ ...a, payment_terms_deposit_days: parseInt(e.target.value) || 7 }))}
+                  className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance due (days)</label>
+                <input type="number" min="1" value={newAgent.payment_terms_balance_days}
+                  onChange={e => setNewAgent(a => ({ ...a, payment_terms_balance_days: parseInt(e.target.value) || 45 }))}
+                  className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Anchor</label>
+                <select value={newAgent.payment_terms_anchor}
+                  onChange={e => setNewAgent(a => ({ ...a, payment_terms_anchor: e.target.value }))}
+                  className={inputCls}>
+                  {Object.entries(ANCHOR_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              {newAgent.has_rolling_deposit && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Rolling deposit limit ($)</label>
+                  <input type="number" min="0" step="100" value={newAgent.rolling_deposit_limit}
+                    onChange={e => setNewAgent(a => ({ ...a, rolling_deposit_limit: parseFloat(e.target.value) || 0 }))}
+                    className={inputCls} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button type="submit" className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
             Add Agent / Client
           </button>
         </form>
@@ -303,6 +349,42 @@ const AgentManagement = () => {
                   <span className="text-sm text-gray-700 dark:text-gray-300">Rolling Deposit</span>
                 </label>
               </div>
+
+              {/* Payment Terms */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Payment Terms</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Deposit due (days)</label>
+                    <input type="number" min="1" value={editForm.payment_terms_deposit_days ?? 7}
+                      onChange={e => setEditForm(f => ({ ...f, payment_terms_deposit_days: parseInt(e.target.value) || 7 }))}
+                      className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Balance due (days)</label>
+                    <input type="number" min="1" value={editForm.payment_terms_balance_days ?? 45}
+                      onChange={e => setEditForm(f => ({ ...f, payment_terms_balance_days: parseInt(e.target.value) || 45 }))}
+                      className={inputCls} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Anchor</label>
+                    <select value={editForm.payment_terms_anchor || 'from_request'}
+                      onChange={e => setEditForm(f => ({ ...f, payment_terms_anchor: e.target.value }))}
+                      className={inputCls}>
+                      {Object.entries(ANCHOR_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </div>
+                  {editForm.has_rolling_deposit && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Rolling deposit limit ($)</label>
+                      <input type="number" min="0" step="100" value={editForm.rolling_deposit_limit ?? 0}
+                        onChange={e => setEditForm(f => ({ ...f, rolling_deposit_limit: parseFloat(e.target.value) || 0 }))}
+                        className={inputCls} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setEditAgent(null)} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700">Save Changes</button>

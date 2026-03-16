@@ -302,10 +302,10 @@ const FinanceDashboard = () => {
 
   // --- Summary card counts ---
   const summaryCards = [
-    { label: 'Pending Validation', value: pendingValidation.length, color: 'text-yellow-600' },
-    { label: 'In Chase', value: chaseBookings.length, color: 'text-red-600' },
-    { label: 'Awaiting Auth', value: awaitingAuth.length, color: 'text-purple-600' },
-    { label: 'Overdue', value: overdueBookings.length, color: 'text-red-700' },
+    { label: 'Pending Validation', value: pendingValidation.length, color: 'text-yellow-600', border: 'border-l-yellow-500', tab: 'pending_validation' },
+    { label: 'In Chase',           value: chaseBookings.length,     color: 'text-red-600',    border: 'border-l-red-500',    tab: 'chase' },
+    { label: 'Awaiting Auth',      value: awaitingAuth.length,      color: 'text-purple-600', border: 'border-l-purple-500', tab: 'awaiting_auth' },
+    { label: 'Overdue',            value: overdueBookings.length,   color: 'text-red-700',    border: 'border-l-red-600',    tab: 'overdue' },
   ];
 
   const tabColor = (tab) => {
@@ -351,13 +351,21 @@ const FinanceDashboard = () => {
         </div>
       )}
 
-      {/* Summary Cards */}
+      {/* Summary Cards — clickable to jump to tab */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
         {summaryCards.map((c) => (
-          <div key={c.label} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">{c.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${c.color}`}>{c.value}</p>
-          </div>
+          <button
+            key={c.label}
+            onClick={() => setActiveTab(c.tab)}
+            className={`text-left bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-l-4 p-4 transition-all hover:shadow-md hover:-translate-y-0.5 ${c.border} ${
+              activeTab === c.tab
+                ? 'border-gray-200 dark:border-gray-700 ring-2 ring-blue-200 dark:ring-blue-800'
+                : 'border-gray-200 dark:border-gray-700'
+            }`}
+          >
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider leading-none">{c.label}</p>
+            <p className={`text-3xl font-bold mt-2 leading-none ${c.color}`}>{c.value}</p>
+          </button>
         ))}
       </div>
 
@@ -377,7 +385,9 @@ const FinanceDashboard = () => {
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                  <span className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full font-medium ${
+                    activeTab === tab.key ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                  }`}>
                     {tab.count}
                   </span>
                 )}

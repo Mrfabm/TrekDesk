@@ -19,6 +19,7 @@ import VoucherManagement from './pages/VoucherManagement';
 import BookingClientDetails from './pages/BookingClientDetails';
 import AuthorizerDashboard from './pages/AuthorizerDashboard';
 import AgentManagement from './pages/AgentManagement';
+import FinanceAR from './pages/FinanceAR';
 import ViewBookings1 from './pages/ViewBookings1';
 import ViewBookings2 from './pages/ViewBookings2';
 import ViewBookings3 from './pages/ViewBookings3';
@@ -155,6 +156,13 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <AgentManagement />
+              </Layout>
+            </PrivateRoute>
+          } />
+          <Route path="/finance-ar" element={
+            <PrivateRoute>
+              <Layout>
+                <FinanceAR />
               </Layout>
             </PrivateRoute>
           } />

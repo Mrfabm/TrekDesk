@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from ..database import get_db
-from ..models.agent_client import AgentClient, AgentClientType
+from ..models.agent_client import AgentClient, AgentClientType, PaymentTermsAnchor
 from ..models.user import UserRole
 from ..utils.auth import get_current_user
 from ..models.user import User
@@ -19,6 +19,10 @@ class AgentClientCreate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     notes: Optional[str] = None
+    payment_terms_deposit_days: int = 7
+    payment_terms_balance_days: int = 45
+    payment_terms_anchor: str = "from_request"
+    rolling_deposit_limit: float = 0.0
 
 
 class AgentClientUpdate(BaseModel):
@@ -29,6 +33,10 @@ class AgentClientUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     notes: Optional[str] = None
+    payment_terms_deposit_days: int = 7
+    payment_terms_balance_days: int = 45
+    payment_terms_anchor: str = "from_request"
+    rolling_deposit_limit: float = 0.0
 
 
 def _to_dict(ac: AgentClient) -> dict:
@@ -42,6 +50,11 @@ def _to_dict(ac: AgentClient) -> dict:
         "phone": ac.phone,
         "notes": ac.notes,
         "created_at": ac.created_at.isoformat() if ac.created_at else None,
+        "payment_terms_deposit_days": ac.payment_terms_deposit_days or 7,
+        "payment_terms_balance_days": ac.payment_terms_balance_days or 45,
+        "payment_terms_anchor": ac.payment_terms_anchor.value if ac.payment_terms_anchor else "from_request",
+        "rolling_deposit_limit": ac.rolling_deposit_limit or 0.0,
+        "rolling_deposit_balance": ac.rolling_deposit_balance or 0.0,
     }
 
 
@@ -70,6 +83,11 @@ async def create_agent(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid type '{data.type}'. Must be 'agent' or 'client'.")
 
+    try:
+        anchor = PaymentTermsAnchor(data.payment_terms_anchor)
+    except ValueError:
+        anchor = PaymentTermsAnchor.FROM_REQUEST
+
     ac = AgentClient(
         name=data.name,
         type=ac_type,
@@ -78,6 +96,11 @@ async def create_agent(
         email=data.email,
         phone=data.phone,
         notes=data.notes,
+        payment_terms_deposit_days=data.payment_terms_deposit_days,
+        payment_terms_balance_days=data.payment_terms_balance_days,
+        payment_terms_anchor=anchor,
+        rolling_deposit_limit=data.rolling_deposit_limit,
+        rolling_deposit_balance=data.rolling_deposit_limit,  # initial balance = limit
     )
     db.add(ac)
     db.commit()
@@ -104,6 +127,10 @@ async def update_agent(
         ac.type = AgentClientType(data.type)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid type '{data.type}'.")
+    try:
+        ac.payment_terms_anchor = PaymentTermsAnchor(data.payment_terms_anchor)
+    except ValueError:
+        ac.payment_terms_anchor = PaymentTermsAnchor.FROM_REQUEST
 
     ac.name = data.name
     ac.is_trusted = data.is_trusted
@@ -111,6 +138,9 @@ async def update_agent(
     ac.email = data.email
     ac.phone = data.phone
     ac.notes = data.notes
+    ac.payment_terms_deposit_days = data.payment_terms_deposit_days
+    ac.payment_terms_balance_days = data.payment_terms_balance_days
+    ac.rolling_deposit_limit = data.rolling_deposit_limit
     db.commit()
     db.refresh(ac)
     return _to_dict(ac)

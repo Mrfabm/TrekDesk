@@ -14,4 +14,7 @@ from .authorization import AuthorizationRequest, Appeal
 from .chase import ChaseRecord, ChaseStatus
 from .amendment import AmendmentRequest, AmendmentFeeType, AmendmentStatus
 from .cancellation import CancellationRequest, CancellationStatus
-from .agent_client import AgentClient, AgentClientType
+from .agent_client import (
+    AgentClient, AgentClientType, PaymentTermsAnchor,
+    RollingDepositTransaction, RollingDepositTransactionType, PaymentDueAudit
+)
