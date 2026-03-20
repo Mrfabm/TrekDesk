@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/24/solid';
 import EnhancedTable from '../components/EnhancedTable';
+import { useBookingActions } from '../hooks/useBookingActions';
 
 // Helper functions for status colors
 const getPaymentStatusColor = (status) => {
@@ -231,14 +232,19 @@ const ViewBookings3 = () => {
 
   const [allData, setAllData] = useState([]);
 
-  useEffect(() => {
-    fetch('http://localhost:8000/api/bookings', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(r => r.json())
-      .then(data => setAllData(Array.isArray(data) ? data : []))
-      .catch(console.error);
-  }, []);
+  const fetchData = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/bookings', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setAllData(Array.isArray(data) ? data : []);
+    } catch {}
+  };
+
+  const { getActionButton, modalsJSX } = useBookingActions(navigate, fetchData);
+
+  useEffect(() => { fetchData(); }, []);
 
   // Handle row click to show details
   const handleRowClick = (booking) => {
@@ -246,94 +252,21 @@ const ViewBookings3 = () => {
     setSelectedBooking(booking);
   };
 
-  // Handle action click based on validation status
-  const handleActionClick = (e, status, bookingId) => {
-    e.stopPropagation(); // Prevent row click when clicking action button
-    switch (status) {
-      case 'ok_to_purchase_full':
-      case 'ok_to_purchase_deposit':
-        navigate(`/passport-management?bookingId=${bookingId}`);
-        break;
-      case 'do_not_purchase':
-        navigate(`/finance/validate/${bookingId}`);
-        break;
-      case 'pending':
-        navigate(`/finance?bookingId=${bookingId}`);
-        break;
-      default:
-        console.log('No action defined for this status');
-    }
-  };
-
-  // Simplified columns for the main table
   const columns = [
+    { header: "Booking Name", accessor: "booking_name" },
+    { header: "Ref", accessor: "booking_ref" },
+    { header: "Product", accessor: "product" },
+    { header: "Trek Date", accessor: "date", render: (row) => row.date ? new Date(row.date).toLocaleDateString() : '-' },
     {
-      header: "Booking Name",
-      accessor: "booking_name",
-      cellClassName: "px-4 py-2 text-sm font-medium text-gray-900",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "200px"
-    },
-    {
-      header: "Ref",
-      accessor: "booking_ref",
-      cellClassName: "px-4 py-2 text-sm text-gray-600",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "Product",
-      accessor: "product",
-      cellClassName: "px-4 py-2 text-sm text-gray-600",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "150px"
-    },
-    {
-      header: "Trek Date",
-      accessor: "date",
-      render: (row) => row.date ? new Date(row.date).toLocaleDateString() : '-',
-      cellClassName: "px-4 py-2 text-sm text-gray-600",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "Payment Status",
-      accessor: "payment_status",
+      header: "Payment Status", accessor: "payment_status",
       render: (row) => row.payment_status ? (
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(row.payment_status)}`}>
-          {row.payment_status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${getPaymentStatusColor(row.payment_status)}`}>
+          {row.payment_status.replace(/_/g, ' ')}
         </span>
       ) : '-',
-      cellClassName: "px-4 py-2 text-sm",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "130px"
     },
-    {
-      header: "Actions",
-      accessor: "validation_status",
-      render: (row) => (
-        <button
-          onClick={(e) => handleActionClick(e, row.validation_status, row.id)}
-          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionStatusColor(row.validation_status)}`}
-        >
-          {row.validation_status === 'ok_to_purchase_full' && "Confirm Permit (Full)"}
-          {row.validation_status === 'ok_to_purchase_deposit' && "Confirm Permit (Deposit)"}
-          {row.validation_status === 'do_not_purchase' && "Request Authorization"}
-          {row.validation_status === 'pending' && "Payment Approval"}
-        </button>
-      ),
-      cellClassName: "px-4 py-2 text-sm",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "160px"
-    },
-    {
-      header: "Done On",
-      accessor: "date_of_request",
-      render: (row) => row.date_of_request ? new Date(row.date_of_request).toLocaleDateString() : '-',
-      cellClassName: "px-4 py-2 text-sm text-gray-600",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    }
+    { header: "Actions", accessor: "actions", render: (row) => getActionButton(row) },
+    { header: "Done On", accessor: "date_of_request", render: (row) => row.date_of_request ? new Date(row.date_of_request).toLocaleDateString() : '-' },
   ];
 
   return (
@@ -353,6 +286,7 @@ const ViewBookings3 = () => {
           onClose={() => setSelectedBooking(null)}
         />
       )}
+      {modalsJSX}
     </div>
   );
 };

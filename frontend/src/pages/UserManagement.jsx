@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import RowActionsDropdown from '../components/RowActionsDropdown';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -227,7 +228,11 @@ const UserManagement = () => {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
               {users.map(user => (
-                <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <tr
+                  key={user.id}
+                  onClick={() => { setEditingUser(user); setEditForm({ email: user.email, username: user.username, password: '', role: user.role }); setShowEditModal(true); }}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                >
                   <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-900 dark:text-white">{user.username}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-900 dark:text-white">{user.email}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-900 dark:text-white">
@@ -238,28 +243,11 @@ const UserManagement = () => {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-xs font-medium space-x-3">
-                    <button 
-                      onClick={() => {
-                        setEditingUser(user);
-                        setEditForm({
-                          email: user.email,
-                          username: user.username,
-                          password: '',
-                          role: user.role,
-                        });
-                        setShowEditModal(true);
-                      }}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 focus:outline-none"
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 focus:outline-none"
-                    >
-                      Delete
-                    </button>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                    <RowActionsDropdown actions={[
+                      { label: 'Edit', onClick: () => { setEditingUser(user); setEditForm({ email: user.email, username: user.username, password: '', role: user.role }); setShowEditModal(true); } },
+                      { label: 'Delete', onClick: () => handleDeleteUser(user.id), variant: 'danger' },
+                    ]} />
                   </td>
                 </tr>
               ))}

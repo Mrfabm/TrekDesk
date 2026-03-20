@@ -24,6 +24,7 @@ const EnhancedTable = ({
   onRowClick,
   rowClassName,
   defaultHiddenColumns = [],
+  onSelectionChange,
 }) => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [filteredData, setFilteredData] = useState(data);
@@ -80,6 +81,19 @@ const EnhancedTable = ({
     });
     setFilteredData(result);
   }, [filters, data]);
+
+  // Clear selection when data changes (tab/filter switch)
+  useEffect(() => {
+    setSelectedRows([]);
+    setSelectAll(false);
+  }, [data]);
+
+  // Notify parent when selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(filteredData.filter(row => selectedRows.includes(row.id)));
+    }
+  }, [selectedRows]);
 
   // Close column picker when clicking outside
   useEffect(() => {
@@ -333,12 +347,6 @@ const EnhancedTable = ({
                 filename="table-export"
                 tableHeaders={columns}
               />
-              <button className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
-                Batch Actions
-              </button>
-              <button className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
-                Save View
-              </button>
             </div>
           </div>
 

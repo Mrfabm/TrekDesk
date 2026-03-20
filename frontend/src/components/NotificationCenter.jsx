@@ -1,194 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import { BellIcon, CheckCircleIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useRef } from 'react';
+import { BellIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
 import axios from '../utils/axios';
 
-const NotificationCenter = () => {
-    const [notifications, setNotifications] = useState([]);
-    const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('unread');
-
-    useEffect(() => {
-        fetchNotifications();
-    }, [activeTab]);
-
-    // Fetch notifications based on status
-    const fetchNotifications = async () => {
-        try {
-            const { data } = await axios.get(`/notifications?status=${activeTab}`);
-            setNotifications(data);
-        } catch (error) {
-            console.error('Error fetching notifications:', error);
-        }
-    };
-
-    // Mark notification as read
-    const markAsRead = async (notificationId) => {
-        try {
-            await axios.post(`/notifications/${notificationId}/read`);
-            fetchNotifications();
-        } catch (error) {
-            console.error('Error marking notification as read:', error);
-        }
-    };
-
-    // Archive notification
-    const archiveNotification = async (notificationId) => {
-        try {
-            await axios.post(`/notifications/${notificationId}/archive`);
-            fetchNotifications();
-        } catch (error) {
-            console.error('Error archiving notification:', error);
-        }
-    };
-
-    // Get priority color
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'URGENT':
-                return 'text-red-600';
-            case 'HIGH':
-                return 'text-orange-500';
-            case 'MEDIUM':
-                return 'text-yellow-500';
-            default:
-                return 'text-gray-500';
-        }
-    };
-
-    // Get notification type icon
-    const getTypeIcon = (type) => {
-        switch (type) {
-            case 'SUCCESS':
-                return '✅';
-            case 'WARNING':
-                return '⚠️';
-            case 'ERROR':
-                return '❌';
-            case 'URGENT':
-                return '🚨';
-            default:
-                return 'ℹ️';
-        }
-    };
-
-    const unreadCount = notifications.filter(n => n.status === 'UNREAD').length;
-
-    return (
-        <div className="relative">
-            {/* Notification Bell */}
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 text-gray-600 hover:text-gray-800 focus:outline-none"
-            >
-                <BellIcon className="h-6 w-6" />
-                {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-                        {unreadCount}
-                    </span>
-                )}
-            </button>
-
-            {/* Notification Panel */}
-            <div className={`
-                absolute right-0 w-80 bg-white rounded-lg shadow-xl 
-                transition-all duration-200 ease-in-out
-                ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}
-                mt-2
-                z-[9999]
-            `}>
-                {/* Tabs */}
-                <div className="flex border-b">
-                    <button
-                        className={`flex-1 py-2 px-4 text-sm font-medium ${
-                            activeTab === 'unread' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'
-                        }`}
-                        onClick={() => setActiveTab('unread')}
-                    >
-                        Unread
-                    </button>
-                    <button
-                        className={`flex-1 py-2 px-4 text-sm font-medium ${
-                            activeTab === 'read' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'
-                        }`}
-                        onClick={() => setActiveTab('read')}
-                    >
-                        Read
-                    </button>
-                    <button
-                        className={`flex-1 py-2 px-4 text-sm font-medium ${
-                            activeTab === 'archived' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'
-                        }`}
-                        onClick={() => setActiveTab('archived')}
-                    >
-                        Archived
-                    </button>
-                </div>
-
-                {/* Notification List */}
-                <div className="max-h-96 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500">
-                            No notifications
-                        </div>
-                    ) : (
-                        notifications.map(notification => (
-                            <div
-                                key={notification.id}
-                                className="p-4 border-b hover:bg-gray-50"
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center">
-                                            <span className="mr-2">
-                                                {getTypeIcon(notification.type)}
-                                            </span>
-                                            <h4 className={`font-medium ${getPriorityColor(notification.priority)}`}>
-                                                {notification.title}
-                                            </h4>
-                                        </div>
-                                        <p className="mt-1 text-sm text-gray-600">
-                                            {notification.message}
-                                        </p>
-                                        {notification.requires_action && notification.action_url && (
-                                            <a
-                                                href={notification.action_url}
-                                                className="mt-2 inline-block text-sm text-blue-600 hover:text-blue-800"
-                                            >
-                                                Take Action →
-                                            </a>
-                                        )}
-                                        <div className="mt-2 text-xs text-gray-400">
-                                            {new Date(notification.created_at).toLocaleString()}
-                                        </div>
-                                    </div>
-                                    <div className="ml-4 flex-shrink-0 flex space-x-2">
-                                        {notification.status === 'UNREAD' && (
-                                            <button
-                                                onClick={() => markAsRead(notification.id)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                                title="Mark as read"
-                                            >
-                                                <CheckCircleIcon className="h-5 w-5" />
-                                            </button>
-                                        )}
-                                        {notification.status !== 'ARCHIVED' && (
-                                            <button
-                                                onClick={() => archiveNotification(notification.id)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                                title="Archive"
-                                            >
-                                                <ArchiveBoxIcon className="h-5 w-5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        </div>
-    );
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case 'urgent': return 'text-red-600';
+    case 'high':   return 'text-orange-500';
+    case 'medium': return 'text-yellow-500';
+    default:       return 'text-gray-500';
+  }
 };
 
-export default NotificationCenter; 
+const getTypeIcon = (type) => {
+  switch (type) {
+    case 'success': return '✅';
+    case 'warning': return '⚠️';
+    case 'error':   return '❌';
+    case 'urgent':  return '🚨';
+    default:        return 'ℹ️';
+  }
+};
+
+const NotificationCenter = () => {
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('unread');
+  const [expandedId, setExpandedId] = useState(null);
+  const panelRef = useRef(null);
+
+  // Fetch tab notifications
+  const fetchNotifications = async (tab = activeTab) => {
+    try {
+      const { data } = await axios.get(`/notifications?status=${tab}`);
+      setNotifications(data);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  // Always keep unread count fresh (independent of active tab)
+  const fetchUnreadCount = async () => {
+    try {
+      const { data } = await axios.get('/notifications?status=unread');
+      setUnreadCount(data.length);
+    } catch {}
+  };
+
+  // Initial load + polling every 30s
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refetch when tab changes or panel opens
+  useEffect(() => {
+    if (isOpen) fetchNotifications(activeTab);
+  }, [activeTab, isOpen]);
+
+  // Click outside to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  const markAsRead = async (id) => {
+    try {
+      await axios.post(`/notifications/${id}/read`);
+      fetchNotifications();
+      fetchUnreadCount();
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  const archiveNotification = async (id) => {
+    try {
+      await axios.post(`/notifications/${id}/archive`);
+      fetchNotifications();
+      fetchUnreadCount();
+    } catch (err) {
+      console.error('Error archiving notification:', err);
+    }
+  };
+
+  return (
+    <div className="relative" ref={panelRef}>
+      {/* Bell button */}
+      <button
+        onClick={() => setIsOpen(v => !v)}
+        className="relative p-2 text-gray-600 hover:text-gray-800 focus:outline-none"
+      >
+        <BellIcon className="h-6 w-6" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full translate-x-1/2 -translate-y-1/2">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Panel */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[9999]">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
+            {unreadCount > 0 && (
+              <span className="text-xs text-gray-400">{unreadCount} unread</span>
+            )}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-gray-100 dark:border-gray-700">
+            {['unread', 'read', 'archived'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+                  activeTab === tab
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* List */}
+          <div className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+            {notifications.length === 0 ? (
+              <p className="p-4 text-center text-xs text-gray-400">No {activeTab} notifications</p>
+            ) : (
+              notifications.map(n => {
+                const isExpanded = expandedId === n.id;
+                return (
+                  <div
+                    key={n.id}
+                    className={`border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors ${
+                      n.status === 'unread' ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''
+                    } hover:bg-gray-50 dark:hover:bg-gray-750`}
+                  >
+                    {/* Clickable header row */}
+                    <button
+                      className="w-full text-left px-3 pt-3 pb-2 flex items-start gap-2"
+                      onClick={() => {
+                        setExpandedId(isExpanded ? null : n.id);
+                        if (n.status === 'unread') markAsRead(n.id);
+                      }}
+                    >
+                      <span className="text-sm leading-none mt-0.5 flex-shrink-0">{getTypeIcon(n.type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-xs font-semibold ${getPriorityColor(n.priority)} ${!isExpanded ? 'truncate' : ''}`}>
+                            {n.title}
+                          </span>
+                          <span className="text-gray-300 dark:text-gray-600 text-xs flex-shrink-0">
+                            {isExpanded ? '▲' : '▼'}
+                          </span>
+                        </div>
+                        {!isExpanded && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{n.message}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">{new Date(n.created_at).toLocaleString()}</p>
+                      </div>
+                    </button>
+
+                    {/* Expanded content */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pl-9">
+                        <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">{n.message}</p>
+                        {n.requires_action && n.action_url && (
+                          <a href={n.action_url} className="mt-2 inline-block text-xs text-blue-600 hover:underline font-medium">
+                            Take Action →
+                          </a>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          {n.status !== 'archived' && (
+                            <button
+                              onClick={() => archiveNotification(n.id)}
+                              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <ArchiveBoxIcon className="h-3.5 w-3.5" /> Archive
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default NotificationCenter;

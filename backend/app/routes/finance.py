@@ -124,6 +124,18 @@ async def validate_payment(
                 db, booking.user_id, "Payment Validated",
                 f"Payment for your booking '{booking.booking_name}' has been validated. Permits will be purchased shortly."
             )
+            # Passport check — mandatory for full payment, warn for deposit
+            if validation_enum == ValidationStatus.OK_TO_PURCHASE_FULL:
+                from ..models.passport_data import PassportData
+                passport_count = db.query(PassportData).filter(PassportData.booking_id == booking.id).count()
+                expected = booking.people or 1
+                if passport_count < expected:
+                    missing = expected - passport_count
+                    create_simple_notification(
+                        db, booking.user_id, "⚠ Passport Copies Required — Immediate Action",
+                        f"Full payment confirmed for '{booking.booking_name}'. Passport copies are mandatory before permits can be purchased. "
+                        f"Please upload {missing} missing passport(s) via Passport Management immediately."
+                    )
             # Notify admins to proceed
             admins = db.query(User).filter(User.role.in_([UserRole.ADMIN, UserRole.SUPERUSER])).all()
             for admin in admins:

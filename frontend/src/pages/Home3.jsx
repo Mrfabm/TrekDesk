@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EnhancedTable from '../components/EnhancedTable';
-import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
+import DateRangeBar from '../components/DateRangeBar';
 import "../styles/datepicker-custom.css";
 import { useTheme } from '../context/ThemeContext';
 import { Collapsible } from '../components/Collapsible';
@@ -213,7 +212,6 @@ const Home3 = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showFilters, setShowFilters] = useState(false);
   const [showSavedFilters, setShowSavedFilters] = useState(false);
-  const [showDatePresets, setShowDatePresets] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const currentUser = localStorage.getItem('username');
@@ -235,6 +233,7 @@ const Home3 = () => {
     deadlines: { critical: 0, warning: 0 },
     quickActions: 0,
     todayBookings: 0,
+    todayReceived: 0,
     criticalDeadlines: 0,
     amendments: { under: 0, completed: 0, declined: 0 },
     cancellations: { under: 0, completed: 0 },
@@ -251,7 +250,7 @@ const Home3 = () => {
       missingDetails: 0,
       depositDue: 0,
       authorizationDue: 0
-    }
+    },
   });
 
   const [quickActions, setQuickActions] = useState({
@@ -288,8 +287,63 @@ const Home3 = () => {
     }
   });
 
-  // API already filters by user for non-admins; use bookings directly
-  const filteredBookingsData = bookings;
+  const filteredBookingsData = useMemo(() => {
+    let data = bookings;
+
+    // Date range (filters by trek date)
+    if (filters.dateRange.from || filters.dateRange.to) {
+      data = data.filter(b => {
+        if (!b.date) return false;
+        const d = new Date(b.date);
+        if (filters.dateRange.from && d < filters.dateRange.from) return false;
+        if (filters.dateRange.to) {
+          const to = new Date(filters.dateRange.to);
+          to.setHours(23, 59, 59, 999);
+          if (d > to) return false;
+        }
+        return true;
+      });
+    }
+
+    // Booking status
+    const activeStatuses = Object.entries(filters.bookingStatus)
+      .filter(([, v]) => v).map(([k]) => k);
+    if (activeStatuses.length > 0) {
+      const statusMap = {
+        confirmed: 'confirmed',
+        pending: 'requested',
+        underAmendment: 'amendment_requested',
+        underCancellation: 'cancellation_requested',
+      };
+      data = data.filter(b => activeStatuses.some(k => b.status === statusMap[k]));
+    }
+
+    // Payment status
+    const activePayments = Object.entries(filters.paymentStatus)
+      .filter(([, v]) => v).map(([k]) => k);
+    if (activePayments.length > 0) {
+      const paymentMap = {
+        fullyPaid: 'fully_paid',
+        depositPaid: 'deposit_paid',
+        paymentDue: 'pending',
+        authorized: 'authorized',
+      };
+      data = data.filter(b => activePayments.some(k => b.payment_status === paymentMap[k]));
+    }
+
+    // Product type
+    const { mountainGorillas, goldenMonkeys } = filters.productType;
+    if (mountainGorillas || goldenMonkeys) {
+      data = data.filter(b => {
+        const p = (b.product || '').toLowerCase();
+        if (mountainGorillas && p.includes('gorilla')) return true;
+        if (goldenMonkeys && (p.includes('golden') || p.includes('monkey'))) return true;
+        return false;
+      });
+    }
+
+    return data;
+  }, [bookings, filters]);
 
   // Calculate stats based on filtered data
   const calculateStats = (data) => {
@@ -314,7 +368,7 @@ const Home3 = () => {
           missingDetails: 0,
           depositDue: 0,
           authorizationDue: 0
-        }
+        },
       };
     }
     return {
@@ -347,6 +401,10 @@ const Home3 = () => {
       todayBookings: data.filter(b => {
         const today = new Date().toISOString().split('T')[0];
         return b.date?.split('T')[0] === today;
+      }).length,
+      todayReceived: data.filter(b => {
+        const today = new Date().toISOString().split('T')[0];
+        return b.date_of_request?.split('T')[0] === today;
       }).length,
       criticalDeadlines: data.filter(b => {
         // 1. Explicitly marked overdue OR balance_due_date has passed
@@ -395,11 +453,16 @@ const Home3 = () => {
       },
       pending: {
         noPayment: data.filter(b => b.payment_status === 'pending' && b.status !== 'provisional').length,
-        missingDetails: data.filter(b => b.status === 'requested' && b.validation_status === 'pending').length,
+        missingDetails: data.filter(b =>
+          b.status !== 'provisional' && b.payment_status !== 'cancelled' &&
+          (b.passport_count || 0) < (b.number_of_people || 0) &&
+          (b.payment_status === 'fully_paid' || b.validation_status === 'ok_to_purchase_full' ||
+           (b.days_to_trek != null && b.days_to_trek <= 60))
+        ).length,
         depositDue: data.filter(b => b.validation_status === 'ok_to_purchase_deposit').length,
         // All provisional bookings need action (confirm or release)
         authorizationDue: data.filter(b => b.status === 'provisional').length
-      }
+      },
     };
   };
 
@@ -463,7 +526,7 @@ const Home3 = () => {
     setQuickActions(calculateQuickActions(filteredBookingsData));
     setTodayConfirmed(calculateTodayConfirmed(filteredBookingsData));
     setIsLoading(false);
-  }, [bookings, isAdmin]);
+  }, [filteredBookingsData, isAdmin]);
 
   // Helper function to calculate permits
   const calculatePermits = (bookings) => {
@@ -484,15 +547,8 @@ const Home3 = () => {
   );
 
   const handleMetricClick = (type, status = 'all') => {
-    // Special handling for passport management related actions
-    if (type === 'confirmed_full_payment' || type === 'confirmed_deposit') {
-      navigate('/passport-management');
-      return;
-    }
-
-    // For other metrics, navigate to view-bookings1 with filter
     const filterParam = status === 'all' ? type : `${type}_${status}`;
-    navigate(`/view-bookings1?filter=${filterParam}`);
+    navigate(`/bookings?filter=${filterParam}`);
   };
 
   // Add filter panel component
@@ -601,47 +657,6 @@ const Home3 = () => {
     </div>
   );
 
-  // Add date presets panel
-  const DatePresetsPanel = () => (
-    <div className={`absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 ${showDatePresets ? 'block' : 'hidden'}`}>
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Date Presets</h3>
-          <button onClick={() => setShowDatePresets(false)} className="text-gray-400 hover:text-gray-500">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="space-y-2">
-          {[
-            { label: 'Today', days: 0 },
-            { label: 'Last 7 Days', days: 7 },
-            { label: 'Last 30 Days', days: 30 },
-            { label: 'Last 90 Days', days: 90 }
-          ].map(preset => (
-            <button
-              key={preset.label}
-              onClick={() => {
-                const to = new Date();
-                const from = new Date();
-                from.setDate(from.getDate() - preset.days);
-                setFilters(prev => ({
-                  ...prev,
-                  dateRange: { from, to }
-                }));
-                setShowDatePresets(false);
-              }}
-              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
   // Add a message for when there are no bookings
   const NoBookingsMessage = () => (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -717,67 +732,13 @@ const Home3 = () => {
 
             {/* Date Selection Row */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => {
-                    const today = new Date();
-                    setFilters(prev => ({
-                      ...prev,
-                      dateRange: { from: today, to: today }
-                    }));
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                >
-                  Today
-                </button>
-                <div className="flex items-center gap-3">
-                  <DatePicker
-                    selected={filters.dateRange.from}
-                    onChange={date => setFilters(prev => ({
-                      ...prev,
-                      dateRange: { ...prev.dateRange, from: date }
-                    }))}
-                    className="w-36 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    placeholderText="From"
-                    dateFormat="MMM d, yyyy"
-                  />
-                  <DatePicker
-                    selected={filters.dateRange.to}
-                    onChange={date => setFilters(prev => ({
-                      ...prev,
-                      dateRange: { ...prev.dateRange, to: date }
-                    }))}
-                    className="w-36 px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    placeholderText="To"
-                    dateFormat="MMM d, yyyy"
-                    minDate={filters.dateRange.from}
-                  />
-                  <button
-                    onClick={() => setFilters(prev => ({
-                      ...prev,
-                      dateRange: { from: null, to: null }
-                    }))}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 whitespace-nowrap"
-                  >
-                    <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Clear
-                  </button>
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowDatePresets(!showDatePresets)}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 whitespace-nowrap"
-                    >
-                      <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Date Range
-                    </button>
-                    <DatePresetsPanel />
-                  </div>
-                </div>
-              </div>
+              <DateRangeBar
+                from={filters.dateRange.from}
+                to={filters.dateRange.to}
+                onFromChange={date => setFilters(prev => ({ ...prev, dateRange: { ...prev.dateRange, from: date } }))}
+                onToChange={date => setFilters(prev => ({ ...prev, dateRange: { ...prev.dateRange, to: date } }))}
+                onClear={() => setFilters(prev => ({ ...prev, dateRange: { from: null, to: null } }))}
+              />
             </div>
           </div>
         </div>
@@ -802,19 +763,25 @@ const Home3 = () => {
                 color="blue"
                 count={Number(quickActions.confirmationRequests + quickActions.okToPurchaseFull + quickActions.okToPurchaseDeposit + quickActions.doNotPurchase || 0)}
                 label="Quick Actions"
-                onClick={() => navigate('/view-bookings1?filter=quick_actions')}
+                onClick={() => navigate('/bookings?filter=quick_actions')}
               />
-              <ActionCard
-                icon={
-                  <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                }
-                color="green"
-                count={Number(stats.todayBookings || 0)}
-                label="Today's Bookings"
-                onClick={() => navigate('/view-bookings1?filter=today')}
-              />
+              <div className="p-3 rounded-lg border border-green-200 bg-green-50 flex flex-col gap-1.5">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wider leading-none">Today</p>
+                <button
+                  onClick={() => navigate('/bookings?filter=today_treks')}
+                  className="flex justify-between items-center text-left hover:bg-green-100/80 rounded px-1 -mx-1 transition-colors"
+                >
+                  <span className="text-xs text-green-700">Treks</span>
+                  <span className="text-base font-bold text-green-700">{Number(stats.todayBookings || 0)}</span>
+                </button>
+                <button
+                  onClick={() => navigate('/bookings?filter=received_today')}
+                  className="flex justify-between items-center text-left hover:bg-green-100/80 rounded px-1 -mx-1 transition-colors"
+                >
+                  <span className="text-xs text-green-700">Received</span>
+                  <span className="text-base font-bold text-green-700">{Number(stats.todayReceived || 0)}</span>
+                </button>
+              </div>
               <ActionCard
                 icon={
                   <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -824,7 +791,7 @@ const Home3 = () => {
                 color="red"
                 count={Number(stats.criticalDeadlines || 0)}
                 label="Critical Deadlines"
-                onClick={() => navigate('/view-bookings1?filter=critical')}
+                onClick={() => navigate('/bookings?filter=critical')}
               />
               <ActionCard
                 icon={
@@ -835,7 +802,7 @@ const Home3 = () => {
                 color="yellow"
                 count={Number((stats.amendments?.under || 0) + (stats.amendments?.completed || 0) + (stats.amendments?.declined || 0))}
                 label="Amendments"
-                onClick={() => navigate('/view-bookings1?filter=amendments')}
+                onClick={() => navigate('/bookings?filter=amendments')}
               />
               <ActionCard
                 icon={
@@ -846,7 +813,7 @@ const Home3 = () => {
                 color="purple"
                 count={Number((stats.cancellations?.under || 0) + (stats.cancellations?.completed || 0))}
                 label="Cancellations"
-                onClick={() => navigate('/view-bookings1?filter=cancellations')}
+                onClick={() => navigate('/bookings?filter=cancellations')}
               />
               <ActionCard
                 icon={
@@ -857,7 +824,7 @@ const Home3 = () => {
                 color="orange"
                 count={Number(stats.pendingPayments || 0)}
                 label="Pending Payments"
-                onClick={() => navigate('/view-bookings1?filter=pending_payments')}
+                onClick={() => navigate('/bookings?filter=pending_payments')}
               />
             </div>
 
@@ -910,28 +877,28 @@ const Home3 = () => {
                         color="orange"
                         count={quickActions.confirmationRequests}
                         label="Confirmation Requests"
-                        onClick={() => navigate('/view-bookings1?filter=confirmation_requests')}
+                        onClick={() => navigate('/bookings?filter=confirmation_requests')}
                       />
                       <ActionCard
                         icon="check"
                         color="green"
                         count={quickActions.okToPurchaseFull}
                         label="OK to Purchase (Full)"
-                        onClick={() => navigate('/view-bookings1?filter=ok_to_purchase_full')}
+                        onClick={() => navigate('/bookings?filter=ok_to_purchase_full')}
                       />
                       <ActionCard
                         icon="dollar"
                         color="blue"
                         count={quickActions.okToPurchaseDeposit}
                         label="OK to Purchase (Deposit)"
-                        onClick={() => navigate('/view-bookings1?filter=ok_to_purchase_deposit')}
+                        onClick={() => navigate('/bookings?filter=ok_to_purchase_deposit')}
                       />
                       <ActionCard
                         icon="x"
                         color="red"
                         count={quickActions.doNotPurchase}
                         label="Do Not Purchase"
-                        onClick={() => navigate('/view-bookings1?filter=do_not_purchase')}
+                        onClick={() => navigate('/bookings?filter=do_not_purchase')}
                       />
                     </div>
                   </div>
@@ -1034,7 +1001,7 @@ const Home3 = () => {
                           <tr
                             key={b.id}
                             className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                            onClick={() => navigate('/view-bookings1?filter=low_availability')}
+                            onClick={() => navigate('/bookings?filter=low_availability')}
                           >
                             <td className="py-1.5 px-2 text-gray-900 dark:text-white font-medium">{b.booking_name}</td>
                             <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{b.product}</td>
@@ -1086,7 +1053,7 @@ const Home3 = () => {
                         tooltip: 'Confirmed bookings with overdue payment'
                       }
                     ]}
-                    onItemClick={(type) => navigate(`/view-bookings1?filter=confirmed_${type.toLowerCase().replace(/\s+/g, '_')}`)}
+                    onItemClick={(type) => navigate(`/bookings?filter=confirmed_${type.toLowerCase().replace(/\s+/g, '_')}`)}
                   />
 
                   {/* Amendments */}
@@ -1111,7 +1078,7 @@ const Home3 = () => {
                         tooltip: 'Amendment requests that were declined'
                       }
                     ]}
-                    onItemClick={(type) => navigate(`/view-bookings1?filter=amendments_${type.toLowerCase().replace(/\s+/g, '_')}`)}
+                    onItemClick={(type) => navigate(`/bookings?filter=amendments_${type.toLowerCase().replace(/\s+/g, '_')}`)}
                   />
 
                   {/* Cancellations */}
@@ -1122,7 +1089,7 @@ const Home3 = () => {
                       { label: 'Under Cancellation', value: stats.cancellations.under },
                       { label: 'Completed', value: stats.cancellations.completed }
                     ]}
-                    onItemClick={(type) => navigate(`/view-bookings1?filter=cancellations_${type.toLowerCase().replace(/\s+/g, '_')}`)}
+                    onItemClick={(type) => navigate(`/bookings?filter=cancellations_${type.toLowerCase().replace(/\s+/g, '_')}`)}
                   />
 
                   {/* Pending Actions */}
@@ -1135,7 +1102,10 @@ const Home3 = () => {
                       { label: 'Deposit Due', value: stats.pending.depositDue },
                       { label: 'Authorization Due', value: stats.pending.authorizationDue }
                     ]}
-                    onItemClick={(type) => navigate(`/view-bookings1?filter=pending_${type.toLowerCase().replace(/\s+/g, '_')}`)}
+                    onItemClick={(type) => {
+                      if (type === 'Missing Details') { navigate('/bookings?filter=missing_passports'); }
+                      else navigate(`/bookings?filter=pending_${type.toLowerCase().replace(/\s+/g, '_')}`);
+                    }}
                   />
                 </div>
               </Collapsible>

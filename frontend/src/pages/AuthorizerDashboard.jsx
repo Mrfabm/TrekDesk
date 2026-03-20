@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import RowActionsDropdown from '../components/RowActionsDropdown';
 
 const API = 'http://localhost:8000/api';
 
@@ -219,14 +220,18 @@ const AuthorizerDashboard = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    {['Booking', 'Reason', 'Deadline', 'Status', 'Auto-flagged', 'Requester', 'Proof', 'Appeal', 'Actions'].map(h => (
+                    {['Booking', 'Reason', 'Deadline', 'Status', 'Auto-flagged', 'Requester', 'Proof', 'Appeal', ''].map(h => (
                       <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {filtered.map(req => (
-                    <tr key={req.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                    <tr
+                      key={req.id}
+                      onClick={() => { if (req.status === 'pending') { setModal({ type: 'authorize', requestId: req.id }); setNotes(''); } }}
+                      className={`hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors ${req.status === 'pending' ? 'cursor-pointer' : ''}`}
+                    >
                       <td className="py-2 px-3">
                         <p className="font-medium text-gray-900 dark:text-white text-xs">{req.booking_name || `#${req.booking_id}`}</p>
                         <p className="text-xs text-gray-400">ID {req.booking_id}</p>
@@ -248,54 +253,20 @@ const AuthorizerDashboard = () => {
                       </td>
                       <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-400">{req.requester_email || '-'}</td>
                       <td className="py-2 px-3">
-                        {req.proof_documents ? (
-                          <button
-                            onClick={() => openDocModal(req)}
-                            className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium hover:bg-blue-100"
-                          >
-                            View ({req.proof_documents.split(',').filter(Boolean).length})
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-400">None</span>
-                        )}
+                        {req.proof_documents
+                          ? <span className="text-xs text-gray-600 dark:text-gray-400">{req.proof_documents.split(',').filter(Boolean).length} doc(s)</span>
+                          : <span className="text-xs text-gray-400">—</span>}
                       </td>
                       <td className="py-2 px-3">
-                        {req.appeal ? (
-                          <div>
-                            {statusBadge(req.appeal.status)}
-                            {req.appeal.status === 'pending' && (
-                              <button
-                                onClick={() => { setModal({ type: 'appeal', requestId: req.id, appealId: req.appeal.id }); setNotes(''); setAppealDecision('approved'); }}
-                                className="mt-1 block text-xs text-blue-600 hover:underline"
-                              >
-                                Review
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
+                        {req.appeal ? statusBadge(req.appeal.status) : <span className="text-xs text-gray-400">—</span>}
                       </td>
-                      <td className="py-2 px-3">
-                        {req.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => { setModal({ type: 'authorize', requestId: req.id }); setNotes(''); }}
-                              className="px-2.5 py-1 bg-green-50 text-green-700 rounded text-xs font-medium hover:bg-green-100"
-                            >
-                              Authorize
-                            </button>
-                            <button
-                              onClick={() => { setModal({ type: 'decline', requestId: req.id }); setNotes(''); }}
-                              className="px-2.5 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100"
-                            >
-                              Decline
-                            </button>
-                          </div>
-                        )}
-                        {req.status !== 'pending' && req.authorizer_notes && (
-                          <p className="text-xs text-gray-500 italic max-w-[140px] line-clamp-2">{req.authorizer_notes}</p>
-                        )}
+                      <td className="py-2 px-3 text-right">
+                        <RowActionsDropdown actions={[
+                          { label: `View Proof (${req.proof_documents ? req.proof_documents.split(',').filter(Boolean).length : 0})`, onClick: () => openDocModal(req), show: !!req.proof_documents },
+                          { label: 'Authorize', onClick: () => { setModal({ type: 'authorize', requestId: req.id }); setNotes(''); }, show: req.status === 'pending', variant: 'primary' },
+                          { label: 'Decline', onClick: () => { setModal({ type: 'decline', requestId: req.id }); setNotes(''); }, show: req.status === 'pending', variant: 'danger' },
+                          { label: 'Review Appeal', onClick: () => { setModal({ type: 'appeal', requestId: req.id, appealId: req.appeal?.id }); setNotes(''); setAppealDecision('approved'); }, show: !!(req.appeal && req.appeal.status === 'pending') },
+                        ]} />
                       </td>
                     </tr>
                   ))}

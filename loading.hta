@@ -1,0 +1,370 @@
+<html>
+<head>
+<title>TrekDesk</title>
+<HTA:APPLICATION
+    ID="loader"
+    APPLICATIONNAME="TrekDesk"
+    BORDER="none"
+    CAPTION="no"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    SYSMENU="no"
+    MAXIMIZEBUTTON="no"
+    MINIMIZEBUTTON="no"
+    SCROLL="no"
+    WINDOWSTATE="normal"
+/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+    width:480px; height:320px;
+    font-family:"Segoe UI", Tahoma, Arial, sans-serif;
+    color:#e2e8f0;
+    overflow:hidden;
+    background:#0b1622;
+}
+
+.bg {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    background: linear-gradient(145deg, #0b1622 0%, #112236 45%, #0f2040 75%, #0b1622 100%);
+}
+
+.orb {
+    position:absolute;
+    width:300px; height:300px; border-radius:50%;
+    background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+    top:-80px; left:50%; margin-left:-150px;
+    animation: breathe 4s ease-in-out infinite;
+}
+@keyframes breathe {
+    0%,100% { transform:scale(1);    opacity:0.5; }
+    50%      { transform:scale(1.2); opacity:1;   }
+}
+
+.card {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    padding:26px 44px 22px;
+}
+
+/* ── Header ── */
+.header { text-align:center; margin-bottom:18px; }
+
+.title {
+    font-size:24px; font-weight:700;
+    color:#f8fafc; letter-spacing:4px;
+    display:inline-block; vertical-align:middle;
+    margin-left:10px;
+}
+
+.tagline {
+    font-size:10px; color:#475569;
+    letter-spacing:2px; text-transform:uppercase; margin-top:2px;
+}
+
+/* ── Progress bar ── */
+.progress-wrap { margin-bottom:22px; }
+
+.progress-meta { margin-bottom:6px; }
+
+.p-label {
+    float:left; font-size:11px; color:#64748b;
+    letter-spacing:0.5px; text-transform:uppercase; line-height:22px;
+}
+.p-pct {
+    float:right; font-size:22px; font-weight:700; color:#10b981; line-height:1;
+}
+.p-pct .sm { font-size:12px; font-weight:400; }
+.clear { clear:both; }
+
+.track {
+    height:8px; background:#0d2035; border-radius:4px;
+    overflow:hidden; position:relative;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+.fill {
+    height:100%; width:0%; border-radius:4px;
+    position:relative; overflow:hidden;
+    background: linear-gradient(90deg, #047857, #10b981, #6ee7b7);
+    box-shadow: 0 0 8px rgba(16,185,129,0.45);
+}
+.shimmer {
+    position:absolute; top:0; bottom:0; left:-80px; width:80px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.38), transparent);
+    animation: shimmer 1.8s ease-in-out infinite;
+}
+@keyframes shimmer { from { left:-80px; } to { left:110%; } }
+
+/* ── Horizontal steps ── */
+.steps-row {
+    display:table; width:100%; border-collapse:collapse;
+    margin-bottom:14px;
+}
+
+/* step cell */
+.sc {
+    display:table-cell; text-align:center;
+    width:22%;
+    vertical-align:top;
+}
+
+/* connector cell */
+.cc {
+    display:table-cell; vertical-align:middle;
+    width:11%;
+    padding-bottom:14px; /* push line up to circle mid-point */
+}
+.cline {
+    height:2px; border-radius:1px;
+    background:#1a3050;
+}
+.cline.done {
+    background:#10b981;
+    box-shadow: 0 0 5px rgba(16,185,129,0.5);
+}
+
+/* circle icon */
+.s-circle {
+    display:inline-block;
+    width:28px; height:28px; border-radius:50%;
+    text-align:center; line-height:24px;
+    font-size:12px; font-weight:700;
+    margin-bottom:6px;
+}
+.s-circle.pending { border:2px solid #1e3a5f; color:#1e3a5f; }
+.s-circle.active  { border:2px solid #10b981; color:#10b981;
+                    box-shadow: 0 0 8px rgba(16,185,129,0.4); }
+.s-circle.done    { background:#10b981; border:2px solid #10b981;
+                    color:#fff; box-shadow: 0 0 6px rgba(16,185,129,0.5); }
+
+/* label below circle */
+.s-lbl { font-size:10px; display:block; }
+.s-lbl.pending { color:#1e3a5f; }
+.s-lbl.active  { color:#94a3b8; }
+.s-lbl.done    { color:#334155; }
+
+/* ── Footer ── */
+.foot {
+    text-align:center; font-size:11px;
+    color:#475569; letter-spacing:0.3px; height:14px;
+}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="orb"></div>
+<div class="card">
+
+    <div class="header">
+        <!-- inline mountain SVG + title side by side -->
+        <svg width="30" height="26" viewBox="0 0 52 44" xmlns="http://www.w3.org/2000/svg"
+             style="display:inline-block;vertical-align:middle;">
+            <polygon points="38,8 52,40 24,40" fill="#047857" opacity="0.55"/>
+            <polygon points="20,2 42,40 -2,40" fill="#10b981" opacity="0.9"/>
+            <polygon points="20,2 24,12 20,10 16,12" fill="#f0fdf4" opacity="0.95"/>
+        </svg>
+        <span class="title">TREKDESK</span>
+        <div class="tagline">Booking Management System</div>
+    </div>
+
+    <div class="progress-wrap">
+        <div class="progress-meta">
+            <span class="p-label" id="plabel">Initializing</span>
+            <span class="p-pct"><span id="pct">0</span><span class="sm">%</span></span>
+            <div class="clear"></div>
+        </div>
+        <div class="track">
+            <div class="fill" id="bar"><div class="shimmer"></div></div>
+        </div>
+    </div>
+
+    <!-- Horizontal step indicators -->
+    <table class="steps-row">
+        <tr>
+            <td class="sc">
+                <div class="s-circle pending" id="i0">&#9675;</div>
+                <span class="s-lbl pending" id="l0">Services</span>
+            </td>
+            <td class="cc"><div class="cline" id="conn0"></div></td>
+            <td class="sc">
+                <div class="s-circle pending" id="i1">&#9675;</div>
+                <span class="s-lbl pending" id="l1">Database</span>
+            </td>
+            <td class="cc"><div class="cline" id="conn1"></div></td>
+            <td class="sc">
+                <div class="s-circle pending" id="i2">&#9675;</div>
+                <span class="s-lbl pending" id="l2">Backend</span>
+            </td>
+            <td class="cc"><div class="cline" id="conn2"></div></td>
+            <td class="sc">
+                <div class="s-circle pending" id="i3">&#9675;</div>
+                <span class="s-lbl pending" id="l3">Frontend</span>
+            </td>
+        </tr>
+    </table>
+
+    <div class="foot" id="foot"></div>
+
+</div>
+
+<script language="JavaScript">
+var W = 480, H = 320;
+setTimeout(function() {
+    window.resizeTo(W, H);
+    window.moveTo(
+        Math.round((screen.availWidth  - W) / 2),
+        Math.round((screen.availHeight - H) / 2)
+    );
+}, 30);
+
+var states    = ["pending","pending","pending","pending"];
+var spin      = ["|", "/", "-", "\\"];
+var spinIdx   = 0;
+var curPct    = 0, tgtPct = 2;
+var phase     = 0;
+var launched  = false;
+var backendUp = false;
+var t0        = (new Date()).getTime();
+
+function elapsed() { return ((new Date()).getTime() - t0) / 1000; }
+
+function setProgress(pct, label) {
+    tgtPct = Math.min(pct, 100);
+    if (label !== undefined)
+        document.getElementById("plabel").innerHTML = label;
+}
+
+function setStep(i, state) {
+    states[i] = state;
+    var ic = document.getElementById("i" + i);
+    var lb = document.getElementById("l" + i);
+    ic.className = "s-circle " + state;
+    lb.className = "s-lbl "    + state;
+    if      (state === "done")   ic.innerHTML = "&#10003;";
+    else if (state === "active") ic.innerHTML = spin[spinIdx];
+    else                         ic.innerHTML = "&#9675;";
+    // update the connector leading INTO this step (i-1 → i)
+    if (i > 0 && state !== "pending") {
+        var c = document.getElementById("conn" + (i - 1));
+        if (states[i - 1] === "done") {
+            c.className = "cline done";
+        }
+    }
+    // update connector leading OUT of this step when done
+    if (state === "done" && i < 3) {
+        document.getElementById("conn" + i).className = "cline done";
+    }
+}
+
+function tryGet(url) {
+    var classes = [
+        "MSXML2.ServerXMLHTTP.6.0",
+        "MSXML2.ServerXMLHTTP.3.0",
+        "MSXML2.ServerXMLHTTP",
+        "MSXML2.XMLHTTP.6.0",
+        "MSXML2.XMLHTTP",
+        "Microsoft.XMLHTTP"
+    ];
+    for (var i = 0; i < classes.length; i++) {
+        try {
+            var x = new ActiveXObject(classes[i]);
+            x.setTimeouts(0, 2000, 2000, 2000);
+            x.open("GET", url, false);
+            x.send();
+            if (x.status > 0) return true;
+        } catch(e) { /* try next */ }
+    }
+    return false;
+}
+
+/* smooth bar — 20ms */
+setInterval(function() {
+    if (curPct < tgtPct) {
+        curPct = Math.min(curPct + 1, tgtPct);
+        document.getElementById("pct").innerHTML = curPct;
+        document.getElementById("bar").style.width = curPct + "%";
+    }
+}, 20);
+
+/* spinner — 120ms */
+setInterval(function() {
+    spinIdx = (spinIdx + 1) % 4;
+    for (var i = 0; i < 4; i++)
+        if (states[i] === "active")
+            document.getElementById("i" + i).innerHTML = spin[spinIdx];
+}, 120);
+
+/* foot dots — 350ms */
+var dotSeq = [".", "..", "...", ".."], dotI = 0;
+var footMsgs = ["Initializing", "Starting services", "Connecting to database",
+                "Waiting for backend", "Waiting for frontend", "Almost there"];
+setInterval(function() {
+    if (launched || phase >= 5) return;
+    dotI = (dotI + 1) % 4;
+    document.getElementById("foot").innerHTML =
+        footMsgs[Math.min(phase, footMsgs.length - 1)] + dotSeq[dotI];
+}, 350);
+
+/* main logic — 1s tick */
+setInterval(function() {
+    if (launched) return;
+    var t = elapsed();
+
+    if (phase === 0) {
+        setStep(0, "active");
+        setProgress(4, "Starting services");
+        phase = 1;
+    }
+
+    if (phase === 1 && t >= 5) {
+        setStep(0, "done");
+        setStep(1, "active");
+        setProgress(20, "Connecting to database");
+        phase = 2;
+    }
+
+    if (phase === 2 && t >= 12) {
+        setStep(1, "done");
+        setStep(2, "active");
+        setProgress(40, "Loading backend");
+        phase = 3;
+    }
+
+    /* poll backend from t=8 regardless of visual phase */
+    if (phase >= 2 && t >= 8 && !backendUp) {
+        if (tryGet("http://localhost:8000/")) {
+            backendUp = true;
+            setStep(0, "done"); setStep(1, "done"); setStep(2, "done");
+            setStep(3, "active");
+            setProgress(72, "Starting frontend");
+            phase = 4;
+        } else if (phase === 3 && tgtPct < 88 && Math.round(t) % 3 === 0) {
+            setProgress(tgtPct + 1);  /* creep slowly — never looks frozen */
+        }
+    }
+
+    /* poll frontend */
+    if (phase === 4) {
+        if (tryGet("http://localhost:3000/")) {
+            setStep(3, "done");
+            setProgress(100, "Ready");
+            document.getElementById("foot").innerHTML = "Opening TrekDesk&#8230;";
+            phase = 5;
+        } else if (tgtPct < 96 && Math.round(t) % 3 === 0) {
+            setProgress(tgtPct + 1);
+        }
+    }
+
+    /* launch */
+    if (phase === 5 && curPct >= 99) {
+        launched = true;
+        try {
+            var sh = new ActiveXObject("WScript.Shell");
+            sh.Run("cmd /c start http://localhost:3000", 0, false);
+        } catch(e) {}
+        setTimeout(function() { window.close(); }, 900);
+    }
+}, 1000);
+</script>
+</body>
+</html>

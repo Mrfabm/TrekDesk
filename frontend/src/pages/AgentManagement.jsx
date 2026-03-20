@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import RowActionsDropdown from '../components/RowActionsDropdown';
 
 const API = 'http://localhost:8000/api';
 const token = () => localStorage.getItem('token');
@@ -269,7 +270,11 @@ const AgentManagement = () => {
                 </td>
               </tr>
             ) : filtered.map(a => (
-              <tr key={a.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
+              <tr
+                key={a.id}
+                onClick={() => { setEditAgent(a); setEditForm({ ...a }); }}
+                className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors cursor-pointer"
+              >
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{a.name}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${a.type === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-cyan-100 text-cyan-700'}`}>
@@ -281,7 +286,7 @@ const AgentManagement = () => {
                   {a.phone && <div>{a.phone}</div>}
                   {!a.email && !a.phone && <span className="text-gray-300">—</span>}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <Toggle checked={a.is_trusted} onChange={() => handleToggle(a, 'is_trusted')} disabled={saving === a.id} />
                     <span className={`text-xs font-medium ${a.is_trusted ? 'text-green-600' : 'text-gray-400'}`}>
@@ -289,7 +294,7 @@ const AgentManagement = () => {
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <Toggle checked={a.has_rolling_deposit} onChange={() => handleToggle(a, 'has_rolling_deposit')} disabled={saving === a.id} colorOn="bg-blue-500" />
                     <span className={`text-xs font-medium ${a.has_rolling_deposit ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -298,9 +303,11 @@ const AgentManagement = () => {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[160px] truncate">{a.notes || '—'}</td>
-                <td className="px-4 py-3 space-x-3">
-                  <button onClick={() => { setEditAgent(a); setEditForm({ ...a }); }} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                  <button onClick={() => handleDelete(a.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                <td className="px-4 py-3 text-right">
+                  <RowActionsDropdown actions={[
+                    { label: 'Edit', onClick: () => { setEditAgent(a); setEditForm({ ...a }); } },
+                    { label: 'Delete', onClick: () => handleDelete(a.id), variant: 'danger' },
+                  ]} />
                 </td>
               </tr>
             ))}

@@ -352,15 +352,16 @@ def topup_alerts():
 
 def passport_voucher_alerts():
     """
-    For CONFIRMED / SECURED_* bookings with a trek date within the next 45 days:
-      - Alert admin if passport data is missing for any traveller
-      - Alert admin if voucher has not been issued
+    Time-based passport and voucher alerts for upcoming bookings:
+      - ≤ 60 days to trek: warning to booking owner + admins (deposit bookings — not mandatory yet)
+      - ≤ 45 days to trek: risk alert to booking owner + admins (mandatory for full payment)
+    Immediate alert on full payment validation is handled separately in finance.py.
     """
     from .models.booking import Booking, BookingStatus
+    from .models.payment import Payment, PaymentStatus, ValidationStatus
     from .models.passport_data import PassportData
     from .models.user import UserRole
 
-    UPCOMING_DAYS = 45
     relevant_statuses = [
         BookingStatus.CONFIRMED,
         BookingStatus.SECURED_FULL,
@@ -371,16 +372,17 @@ def passport_voucher_alerts():
     db = _db()
     try:
         now = datetime.utcnow()
-        cutoff = (now + timedelta(days=UPCOMING_DAYS)).date()
         today = now.date()
+        cutoff_60 = (now + timedelta(days=60)).date()
 
         bookings = (
             db.query(Booking)
+            .join(Payment, isouter=True)
             .filter(
                 Booking.booking_status.in_(relevant_statuses),
                 Booking.date != None,
-                Booking.date <= cutoff,
                 Booking.date >= today,
+                Booking.date <= cutoff_60,
             )
             .all()
         )
@@ -388,6 +390,9 @@ def passport_voucher_alerts():
         alerted_passport = 0
         alerted_voucher = 0
         for booking in bookings:
+            days_to_trek = (booking.date - today).days
+
+            # ── Passport check ──────────────────────────────────────────────
             passport_count = (
                 db.query(PassportData)
                 .filter(PassportData.booking_id == booking.id)
@@ -396,15 +401,50 @@ def passport_voucher_alerts():
             expected = booking.people or 1
             if passport_count < expected:
                 missing = expected - passport_count
-                _notify_role(
-                    db, [UserRole.ADMIN, UserRole.SUPERUSER],
-                    "Missing Passport Data",
-                    f"Booking '{booking.booking_name}' (trek on {booking.date}) is missing passport data "
-                    f"for {missing} traveller(s). Only {passport_count}/{expected} uploaded.",
+                payment = booking.payment
+                is_full_payment = payment and (
+                    payment.validation_status == ValidationStatus.OK_TO_PURCHASE_FULL
+                    or payment.payment_status == PaymentStatus.FULLY_PAID
                 )
+
+                if days_to_trek <= 45:
+                    user_title = "⚠ Passport Risk — Action Required"
+                    mandatory_note = (
+                        "Passports are mandatory for full payment bookings — permits cannot be purchased without them."
+                        if is_full_payment else
+                        "Please upload all guest passports immediately."
+                    )
+                    user_msg = (
+                        f"Trek in {days_to_trek} day(s) for '{booking.booking_name}'. "
+                        f"{missing} passport(s) still missing. {mandatory_note}"
+                    )
+                    admin_title = f"Passport Risk ({days_to_trek}d) — {booking.booking_name}"
+                    admin_msg = (
+                        f"Booking '{booking.booking_name}' (trek: {booking.date}) has {missing}/{expected} "
+                        f"passports missing. {'Full payment — mandatory.' if is_full_payment else 'Deposit booking.'}"
+                    )
+                else:  # 46–60 days
+                    user_title = "Passport Upload Reminder"
+                    mandatory_note = (
+                        "Full payment received — passport copies are required before permits can be purchased."
+                        if is_full_payment else
+                        "Please upload all guest passports before the 45-day cutoff."
+                    )
+                    user_msg = (
+                        f"{missing} passport(s) missing for '{booking.booking_name}' "
+                        f"(trek in {days_to_trek} days). {mandatory_note}"
+                    )
+                    admin_title = f"Passport Warning ({days_to_trek}d) — {booking.booking_name}"
+                    admin_msg = (
+                        f"Booking '{booking.booking_name}' (trek: {booking.date}) has {missing}/{expected} "
+                        f"passports missing. {days_to_trek} days to trek."
+                    )
+
+                _notify(db, booking.user_id, user_title, user_msg)
+                _notify_role(db, [UserRole.ADMIN, UserRole.SUPERUSER], admin_title, admin_msg)
                 alerted_passport += 1
 
-            # Check voucher — if booking has a linked voucher record use it; otherwise notify
+            # ── Voucher check (admin only) ───────────────────────────────────
             if not getattr(booking, 'voucher', None):
                 _notify_role(
                     db, [UserRole.ADMIN, UserRole.SUPERUSER],

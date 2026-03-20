@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EnhancedTable from '../components/EnhancedTable';
+import RowActionsDropdown from '../components/RowActionsDropdown';
 
 const API = 'http://localhost:8000/api';
 
@@ -171,15 +172,12 @@ const FinanceDashboard = () => {
       render: (row) => paymentBadge(row.payment_status),
     },
     {
-      header: 'Actions',
+      header: '',
       accessor: 'id',
       render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); navigate(`/finance/validate/${row.id}`); }}
-          className="px-3 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium hover:bg-blue-100 transition-colors whitespace-nowrap"
-        >
-          Validate
-        </button>
+        <RowActionsDropdown actions={[
+          { label: 'Validate', onClick: () => navigate(`/finance/validate/${row.id}`), variant: 'primary' },
+        ]} />
       ),
     },
   ];
@@ -270,16 +268,13 @@ const FinanceDashboard = () => {
       ),
     },
     {
-      header: 'Actions',
+      header: '',
       accessor: 'id',
-      render: (row) => row.status === 'pending' ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); confirmFeePaid(row.id); }}
-          className="px-3 py-1 bg-green-50 text-green-700 rounded text-xs font-medium hover:bg-green-100 transition-colors whitespace-nowrap"
-        >
-          Confirm Fee Paid
-        </button>
-      ) : null,
+      render: (row) => (
+        <RowActionsDropdown actions={[
+          { label: 'Confirm Fee Paid', onClick: () => confirmFeePaid(row.id), show: row.status === 'pending', variant: 'primary' },
+        ]} />
+      ),
     },
   ];
 
@@ -325,9 +320,16 @@ const FinanceDashboard = () => {
       return <EnhancedTable data={chaseRecords} columns={chaseColumns} />;
     }
     if (activeTab === 'amendment_fees') {
-      return <EnhancedTable data={amendmentsPending} columns={amendmentColumns} />;
+      return <EnhancedTable data={amendmentsPending} columns={amendmentColumns}  />;
     }
-    return <EnhancedTable data={tabData[activeTab] || []} columns={bookingColumns} />;
+    return (
+      <EnhancedTable
+        data={tabData[activeTab] || []}
+        columns={bookingColumns}
+        onRowClick={(row) => navigate(`/finance/validate/${row.id}`)}
+        
+      />
+    );
   };
 
   return (

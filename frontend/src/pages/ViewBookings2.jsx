@@ -1,6 +1,214 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import EnhancedTable from '../components/EnhancedTable';
+import { useBookingActions } from '../hooks/useBookingActions';
+
+const PERMIT_URL = 'https://www.gorilla-permit.com/';
+
+const statusChip = (text, cls) => (
+  <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{text}</span>
+);
+
+const BookingDetailPanel = ({ row, onClose, navigate, handlePurchasePermits, role }) => {
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setDetails(null);
+    fetch(`http://localhost:8000/api/bookings/${row.id}/client-details`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) { setDetails(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [row.id]);
+
+  const passportCount = details?.passports?.length || 0;
+  const peopleCount = details?.number_of_people || row.number_of_people || 0;
+  const passportsComplete = passportCount >= peopleCount && peopleCount > 0;
+  const canPurchaseFull = details?.validation_status === 'ok_to_purchase_full';
+  const canPurchaseDeposit = details?.validation_status === 'ok_to_purchase_deposit';
+  const canPurchaseAuth = details?.validation_status === 'do_not_purchase' && details?.authorization_status === 'authorized';
+  const isAdmin = role === 'admin';
+
+  const validationLabel = {
+    ok_to_purchase_full: ['OK TO PURCHASE (FULL)', 'bg-green-50 text-green-700'],
+    ok_to_purchase_deposit: ['OK TO PURCHASE (DEPOSIT)', 'bg-yellow-50 text-yellow-700'],
+    do_not_purchase: ['DO NOT PURCHASE', 'bg-red-50 text-red-700'],
+  };
+  const paymentLabel = {
+    fully_paid: ['Fully Paid', 'bg-green-50 text-green-700'],
+    deposit_paid: ['Deposit Paid', 'bg-yellow-50 text-yellow-700'],
+    pending: ['Pending', 'bg-gray-50 text-gray-600'],
+    overdue: ['Overdue', 'bg-red-50 text-red-700'],
+    partial: ['Partial', 'bg-orange-50 text-orange-700'],
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 flex" onClick={onClose}>
+      {/* backdrop */}
+      <div className="flex-1 bg-black/20" />
+      {/* panel */}
+      <div
+        className="w-[520px] bg-white dark:bg-gray-800 shadow-2xl flex flex-col overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{row.booking_name}</h2>
+            {row.booking_ref && <p className="text-xs text-gray-500 mt-0.5">Ref: {row.booking_ref}</p>}
+            <p className="text-xs text-gray-400 mt-0.5">{row.product} — {row.date ? new Date(row.date).toLocaleDateString() : '-'}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/bookings/${row.id}/client`)}
+              className="text-xs text-blue-600 hover:underline"
+            >Full Details →</button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">×</button>
+          </div>
+        </div>
+
+        {loading && (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400 py-16">Loading...</div>
+        )}
+
+        {!loading && details && (
+          <div className="p-5 space-y-6">
+
+            {/* Status row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Booking</p>
+                {statusChip(
+                  (details.status || '-').replace(/_/g, ' '),
+                  details.status === 'confirmed' ? 'bg-green-50 text-green-700' :
+                  details.status === 'provisional' ? 'bg-yellow-50 text-yellow-700' :
+                  details.status === 'requested' ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Payment</p>
+                {(() => { const [l, c] = paymentLabel[details.payment_status] || [details.payment_status || '-', 'bg-gray-50 text-gray-600']; return statusChip(l, c); })()}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Validation</p>
+                {details.validation_status
+                  ? (() => { const [l, c] = validationLabel[details.validation_status] || [details.validation_status, 'bg-gray-50 text-gray-600']; return statusChip(l, c); })()
+                  : <span className="text-xs text-gray-400">—</span>}
+              </div>
+            </div>
+
+            {/* Passport section */}
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Passports ({passportCount} / {peopleCount})
+                </h3>
+                {!passportsComplete && (
+                  <span className="text-xs text-red-600 font-medium">Incomplete ⚠</span>
+                )}
+                {passportsComplete && (
+                  <span className="text-xs text-green-600 font-medium">Complete ✓</span>
+                )}
+              </div>
+
+              {passportCount === 0 ? (
+                <p className="text-xs text-gray-400">No passport records uploaded yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        {['Name', 'Passport No.', 'DOB', 'Expiry', 'Nationality'].map(h => (
+                          <th key={h} className="text-left py-1.5 px-2 text-gray-400 uppercase tracking-wider font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {details.passports.map((p, i) => (
+                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                          <td className="py-1.5 px-2 text-gray-900 dark:text-white">{p.full_name}</td>
+                          <td className="py-1.5 px-2 font-mono text-gray-700 dark:text-gray-300">{p.passport_number}</td>
+                          <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{p.date_of_birth}</td>
+                          <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{p.passport_expiry}</td>
+                          <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400">{p.nationality || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                {(!passportsComplete || role === 'admin') && (
+                  <button
+                    onClick={() => { localStorage.setItem('activeBookingId', row.id); navigate('/passport-management'); }}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700"
+                  >
+                    {passportsComplete ? 'Manage Passports' : `Upload Passports (${passportCount}/${peopleCount})`}
+                  </button>
+                )}
+                <button
+                  onClick={() => { localStorage.setItem('activeBookingId', row.id); navigate('/voucher-management'); }}
+                  className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-medium rounded-md hover:bg-gray-200"
+                >
+                  {details.voucher ? 'View Voucher ✓' : 'Manage Voucher'}
+                </button>
+              </div>
+            </section>
+
+            {/* Admin permit purchase section */}
+            {isAdmin && (canPurchaseFull || canPurchaseDeposit || canPurchaseAuth) && (
+              <section className="border-t border-gray-200 dark:border-gray-700 pt-5">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Permit Purchase</h3>
+
+                {canPurchaseFull && !passportsComplete && (
+                  <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700 mb-3">
+                    Passports mandatory for full payment purchase — {peopleCount - passportCount} missing. Cannot proceed.
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <a
+                    href={PERMIT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-medium rounded-md hover:bg-gray-200"
+                  >Go to Permit Site →</a>
+
+                  {canPurchaseFull && (
+                    <button
+                      disabled={!passportsComplete}
+                      onClick={() => { handlePurchasePermits(row.id, 'full'); onClose(); }}
+                      className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Mark as Purchased (Full)</button>
+                  )}
+                  {canPurchaseDeposit && (
+                    <button
+                      onClick={() => { handlePurchasePermits(row.id, 'deposit'); onClose(); }}
+                      className="px-3 py-2 bg-yellow-500 text-white text-xs font-medium rounded-md hover:bg-yellow-600"
+                    >Mark as Purchased (Deposit)</button>
+                  )}
+                  {canPurchaseAuth && (
+                    <button
+                      onClick={() => { handlePurchasePermits(row.id, 'authorization'); onClose(); }}
+                      className="px-3 py-2 bg-purple-600 text-white text-xs font-medium rounded-md hover:bg-purple-700"
+                    >Mark as Purchased (Auth)</button>
+                  )}
+                </div>
+              </section>
+            )}
+
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ViewBookings2 = () => {
   const location = useLocation();
@@ -8,37 +216,23 @@ const ViewBookings2 = () => {
   const searchParams = new URLSearchParams(location.search);
   const filterParam = searchParams.get('filter');
 
+  const role = localStorage.getItem('role');
   const [allData, setAllData] = useState([]);
+  const [detailPanel, setDetailPanel] = useState(null);
 
-  useEffect(() => {
-    fetch('http://localhost:8000/api/bookings', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-      .then(r => r.json())
-      .then(data => setAllData(Array.isArray(data) ? data : []))
-      .catch(console.error);
-  }, []);
-
-  // Updated handleActionClick to use existing routes
-  const handleActionClick = (status, bookingId) => {
-    switch (status) {
-            case 'ok_to_purchase_full':
-            case 'ok_to_purchase_deposit':
-        // Navigate to passport management with bookingId
-        navigate(`/passport-management?bookingId=${bookingId}`);
-              break;
-            case 'do_not_purchase':
-        // Navigate to finance validation with bookingId
-        navigate(`/finance/validate/${bookingId}`);
-              break;
-      case 'pending':
-        // Send to finance dashboard with bookingId parameter
-        navigate(`/finance?bookingId=${bookingId}`);
-              break;
-            default:
-        console.log('No action defined for this status');
-    }
+  const fetchData = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/bookings', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setAllData(Array.isArray(data) ? data : []);
+    } catch {}
   };
+
+  const { getActionButton, modalsJSX, handlePurchasePermits } = useBookingActions(navigate, fetchData);
+
+  useEffect(() => { fetchData(); }, []);
 
   const filterData = (data) => {
     if (!filterParam) return data;
@@ -68,6 +262,10 @@ const ViewBookings2 = () => {
       case 'ok_to_purchase_deposit': return data.filter(b => b.validation_status === 'ok_to_purchase_deposit');
       case 'do_not_purchase': return data.filter(b => b.validation_status === 'do_not_purchase');
       case 'confirmed_bookings': return data.filter(b => b.status === 'confirmed');
+      case 'missing_passports': return data.filter(b =>
+        b.status !== 'provisional' && b.payment_status !== 'cancelled' &&
+        (b.passport_count || 0) < (b.number_of_people || 0)
+      );
       default: return data;
     }
   };
@@ -98,182 +296,64 @@ const ViewBookings2 = () => {
     return colors[status] || "bg-gray-100 text-gray-800";
   };
 
-  const getActionStatusColor = (status) => {
-    const colors = {
-      ok_to_purchase_full: "bg-green-100 text-green-800 cursor-pointer hover:bg-green-200",
-      ok_to_purchase_deposit: "bg-yellow-100 text-yellow-800 cursor-pointer hover:bg-yellow-200",
-      pending: "bg-blue-100 text-blue-800 cursor-pointer hover:bg-blue-200",
-      do_not_purchase: "bg-red-100 text-red-800 cursor-pointer hover:bg-red-200"
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
   // Get the filtered data from the complete dataset
   const filteredData = React.useMemo(() => filterData(allData), [allData, filterParam]);
 
-  // Updated columns configuration
   const columns = [
+    { header: "#", accessor: "id" },
+    { header: "Booking Name", accessor: "booking_name" },
+    { header: "Booking Ref", accessor: "booking_ref" },
+    { header: "Invoice No.", accessor: "invoice_no" },
+    { header: "No. Permits", accessor: "number_of_permits" },
+    { header: "Voucher", accessor: "voucher" },
+    { header: "Request Date", accessor: "date_of_request", render: (row) => row.date_of_request ? new Date(row.date_of_request).toLocaleDateString() : '-' },
+    { header: "Trek Date", accessor: "trekking_date", render: (row) => row.trekking_date ? new Date(row.trekking_date).toLocaleDateString() : '-' },
+    { header: "Head of File", accessor: "head_of_file" },
+    { header: "Agent/Client", accessor: "originating_agent" },
+    { header: "Product", accessor: "product" },
+    { header: "Date", accessor: "date", render: (row) => row.date ? new Date(row.date).toLocaleDateString() : '-' },
+    { header: "People", accessor: "people" },
+    { header: "Total", accessor: "total_amount", render: (row) => row.total_amount != null ? `$${Number(row.total_amount).toLocaleString()}` : '-' },
+    { header: "Paid", accessor: "paid_amount", render: (row) => row.paid_amount != null ? `$${Number(row.paid_amount).toLocaleString()}` : '-' },
     {
-      header: "#",
-      accessor: "id",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 text-center",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 text-center",
-      width: "60px"
-    },
-    {
-      header: "Booking Name",
-      accessor: "booking_name",
-      cellClassName: "px-4 py-2 text-sm font-medium text-gray-900 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "180px"
-    },
-    {
-      header: "Booking Ref",
-      accessor: "booking_ref",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "Invoice No.",
-      accessor: "invoice_no",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "No. Permits",
-      accessor: "number_of_permits",
-      cellClassName: "px-4 py-2 text-sm text-gray-900 text-center truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "100px"
-    },
-    {
-      header: "Voucher",
-      accessor: "voucher",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "100px"
-    },
-    {
-      header: "Request Date",
-      accessor: "date_of_request",
-      cell: (value) => new Date(value).toLocaleDateString(),
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "Trek Date",
-      accessor: "trekking_date",
-      cell: (value) => new Date(value).toLocaleDateString(),
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "Head of File",
-      accessor: "head_of_file",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "150px"
-    },
-    {
-      header: "Agent/Client",
-      accessor: "originating_agent",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "150px"
-    },
-    {
-      header: "Product",
-      accessor: "product",
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "150px"
-    },
-    {
-      header: "Date",
-      accessor: "date",
-      cell: (value) => new Date(value).toLocaleDateString(),
-      cellClassName: "px-4 py-2 text-sm text-gray-600 truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "120px"
-    },
-    {
-      header: "People",
-      accessor: "people",
-      cellClassName: "px-4 py-2 text-sm text-gray-900 text-center truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "80px"
-    },
-    {
-      header: "Total",
-      accessor: "total_amount",
-      cell: (value) => `$${value.toLocaleString()}`,
-      cellClassName: "px-4 py-2 text-sm text-gray-900 text-right truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "100px"
-    },
-    {
-      header: "Paid",
-      accessor: "paid_amount",
-      cell: (value) => `$${value.toLocaleString()}`,
-      cellClassName: "px-4 py-2 text-sm text-gray-900 text-right truncate",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "100px"
-    },
-    {
-      header: "Booking Status",
-      accessor: "status",
-      cell: (value) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full truncate ${getBookingStatusColor(value)}`}>
-          {value.charAt(0).toUpperCase() + value.slice(1)}
+      header: "Booking Status", accessor: "status",
+      render: (row) => row.status ? (
+        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${getBookingStatusColor(row.status)}`}>
+          {row.status.replace(/_/g, ' ')}
         </span>
-      ),
-      cellClassName: "px-4 py-2 text-sm",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "130px"
+      ) : '-',
     },
     {
-      header: "Payment Status",
-      accessor: "payment_status",
-      cell: (value) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full truncate ${getPaymentStatusColor(value)}`}>
-            {value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+      header: "Payment Status", accessor: "payment_status",
+      render: (row) => row.payment_status ? (
+        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${getPaymentStatusColor(row.payment_status)}`}>
+          {row.payment_status.replace(/_/g, ' ')}
         </span>
-      ),
-      cellClassName: "px-4 py-2 text-sm",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "130px"
+      ) : '-',
     },
-    {
-      header: "Actions",
-      accessor: "validation_status",
-      cell: (value, row) => (
-        <button
-          onClick={() => handleActionClick(value, row.id)}
-          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full truncate ${getActionStatusColor(value)}`}
-        >
-          {value === 'ok_to_purchase_full' && "Confirm Permit (Full)"}
-          {value === 'ok_to_purchase_deposit' && "Confirm Permit (Deposit)"}
-          {value === 'do_not_purchase' && "Request Authorization"}
-          {value === 'pending' && "Payment Approval"}
-        </button>
-      ),
-      cellClassName: "px-4 py-2 text-sm",
-      headerClassName: "px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50",
-      width: "160px"
-    }
+    { header: "Actions", accessor: "actions", render: (row) => getActionButton(row) },
   ];
 
   return (
-    <EnhancedTable
-      columns={columns}
-      data={filteredData}
-      totalRows={allData.length}
-      filteredRows={filteredData.length}
-    />
+    <div>
+      <EnhancedTable
+        columns={columns}
+        data={filteredData}
+        totalRows={allData.length}
+        filteredRows={filteredData.length}
+        onRowClick={(row) => setDetailPanel(row)}
+      />
+      {modalsJSX}
+      {detailPanel && (
+        <BookingDetailPanel
+          row={detailPanel}
+          onClose={() => setDetailPanel(null)}
+          navigate={navigate}
+          handlePurchasePermits={handlePurchasePermits}
+          role={role}
+        />
+      )}
+    </div>
   );
 };
 
